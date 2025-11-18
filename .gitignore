@@ -12,6 +12,9 @@ dist/
 # Test coverage
 coverage/
 
+# Test files
+agenda-config.test.yaml
+
 # IDE
 .vscode/
 .idea/
