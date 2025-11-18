@@ -13,7 +13,8 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
-    "agenda": "node dist/cli.js"
+    "agenda": "node dist/cli.js",
+    "agenda:batch": "node dist/batch-cli.js"
   },
   "keywords": [
     "1on1",
