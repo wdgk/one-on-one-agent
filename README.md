@@ -17,20 +17,52 @@ Backlogの活動データから1on1アジェンダを自動生成するCLIツー
 
 ## セットアップ
 
+### 1. リポジトリのクローン
+
 ```bash
-# 依存関係のインストール
+git clone https://github.com/wdgk/one-on-one-agent.git
+cd one-on-one-agent
+```
+
+### 2. 依存関係のインストール
+
+```bash
 npm install
+```
 
-# 環境変数の設定
+### 3. 環境変数の設定
+
+`.env`ファイルを作成し、APIキーを設定：
+
+```bash
 cp .env.example .env
-# .envファイルを編集してAPIキーを設定
+```
 
-# ビルド
+`.env`ファイルを編集して以下を設定：
+
+```env
+BACKLOG_DOMAIN=your-space.backlog.com
+BACKLOG_API_KEY=your-backlog-api-key
+ANTHROPIC_API_KEY=your-anthropic-api-key
+```
+
+- **BACKLOG_DOMAIN**: BacklogのスペースURL（例: `example.backlog.com`）
+- **BACKLOG_API_KEY**: Backlog > 個人設定 > API から取得
+- **ANTHROPIC_API_KEY**: https://console.anthropic.com/ から取得
+
+### 4. ビルド
+
+```bash
 npm run build
+```
 
-# グローバルコマンドとして使用する場合（オプション）
+### 5. グローバルコマンドとして使用する場合（オプション）
+
+```bash
 npm link
 ```
+
+これにより、`npm run agenda`の代わりに`agenda`コマンドが使えるようになります。
 
 ## 使い方
 
