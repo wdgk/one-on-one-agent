@@ -40,18 +40,36 @@ export function parseJsonFromMcpResponse<T>(
     const cleanedText = responseText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
     return JSON.parse(cleanedText);
   } catch (error) {
-    // JSONが途中で切れている、または制御文字エラーの場合、修復を試みる
-    if (error instanceof Error &&
-        (error.message.includes('Unterminated') ||
-         error.message.includes('Bad control character'))) {
+    // JSONが途中で切れている場合、修復を試みる
+    if (error instanceof Error) {
       try {
         // 制御文字を除去
         let repairedText = responseText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 
-        // 配列が途中で切れている場合、最後の不完全なオブジェクトを除去して配列を閉じる
-        const lastCompleteObjectIndex = repairedText.lastIndexOf('},');
-        if (lastCompleteObjectIndex > 0) {
-          repairedText = repairedText.substring(0, lastCompleteObjectIndex + 1) + '\n]';
+        // 配列が途中で切れている場合、最後の完全なオブジェクトまで切り詰める
+        // パターン1: },\n  { で次のオブジェクトが始まっている場合
+        const lastCompletePattern1 = repairedText.lastIndexOf('},\n  {');
+        // パターン2: } だけで終わっている場合
+        const lastCompletePattern2 = repairedText.lastIndexOf('}\n]');
+
+        let cutoffIndex = -1;
+
+        if (lastCompletePattern2 > 0) {
+          // 既に閉じられている場合はそのまま
+          cutoffIndex = lastCompletePattern2 + 3; // '}\n]'.length
+        } else if (lastCompletePattern1 > 0) {
+          // 最後の完全なオブジェクトの後ろで切り詰め
+          cutoffIndex = lastCompletePattern1 + 1; // '},' の後ろ
+        } else {
+          // 単純に最後の }, を探す
+          const simplePattern = repairedText.lastIndexOf('},');
+          if (simplePattern > 0) {
+            cutoffIndex = simplePattern + 1;
+          }
+        }
+
+        if (cutoffIndex > 0) {
+          repairedText = repairedText.substring(0, cutoffIndex) + '\n]';
           return JSON.parse(repairedText);
         }
       } catch (repairError) {
