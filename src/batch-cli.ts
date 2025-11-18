@@ -3,6 +3,7 @@
 import 'dotenv/config';
 import { ConfigLoader } from './batch/config-loader.js';
 import { BatchAgendaGenerator } from './batch/batch-generator.js';
+import { formatPeriod } from './batch/period-formatter.js';
 
 /**
  * バッチCLIエントリーポイント
@@ -19,6 +20,10 @@ async function main() {
     const arg = args[i];
 
     if (arg === '--config' || arg === '-c') {
+      if (i + 1 >= args.length) {
+        console.error('❌ エラー: --config には設定ファイルのパスを指定してください');
+        process.exit(1);
+      }
       configPath = args[++i];
     } else if (arg === '--dry-run' || arg === '-d') {
       dryRun = true;
@@ -47,16 +52,7 @@ async function main() {
     // メンバー一覧を表示
     console.log('--- 対象メンバー ---');
     for (const member of config.members) {
-      let periodText = '';
-      if (member.period?.weeks) {
-        periodText = `${member.period.weeks}週間`;
-      } else if (member.period?.months) {
-        periodText = `${member.period.months}ヶ月`;
-      } else if (member.period?.days) {
-        periodText = `${member.period.days}日`;
-      } else {
-        periodText = '2週間（デフォルト）';
-      }
+      const periodText = formatPeriod(member.period);
       console.log(`  - ${member.name} (${periodText})`);
     }
     console.log();

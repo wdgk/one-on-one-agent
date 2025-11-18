@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { OneOnOneAgendaAgent } from '../agent.js';
 import { generateAgendaFilename } from '../file-helpers.js';
+import { formatPeriodForGeneration } from './period-formatter.js';
 import type { BatchConfig, BatchResult, MemberResult, Member } from '../model/batch.js';
 
 /**
@@ -96,17 +97,7 @@ export class BatchAgendaGenerator {
 
     try {
       // 期間指定の文字列を構築
-      let periodText = '';
-      if (member.period?.weeks) {
-        periodText = `直近${member.period.weeks}週間`;
-      } else if (member.period?.months) {
-        periodText = `直近${member.period.months}ヶ月`;
-      } else if (member.period?.days) {
-        periodText = `直近${member.period.days}日`;
-      } else {
-        periodText = '直近2週間'; // デフォルト
-      }
-
+      const periodText = formatPeriodForGeneration(member.period);
       const inputText = `${member.name}の${periodText}`;
 
       // アジェンダ生成
