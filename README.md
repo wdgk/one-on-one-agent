@@ -108,6 +108,88 @@ output/agenda_佐藤太郎_2024-11-15.md
 - 1on1での質問案
 - メモ欄
 
+## バッチ処理
+
+複数メンバーのアジェンダを一括生成できます。
+
+### 1. 設定ファイルの作成
+
+`agenda-config.yaml`を作成します：
+
+```yaml
+# メンバーリスト
+members:
+  - name: 佐藤太郎
+    period:
+      weeks: 2  # 2週間分
+
+  - name: 田中花子
+    period:
+      months: 1  # 1ヶ月分
+
+  - name: 山田一郎
+    period:
+      days: 7  # 7日分
+
+  - name: 鈴木次郎
+    # 期間指定なし = デフォルト2週間
+
+# オプション設定
+options:
+  maxConcurrency: 3      # 最大並列実行数
+  continueOnError: true  # エラー時も続行
+  outputDir: output      # 出力ディレクトリ
+```
+
+**注意**:
+- `weeks`, `months`, `days`のうち1つだけ指定してください
+- Backlogでユーザーが英語名で登録されている場合、英語名で指定してください
+
+### 2. バッチ実行
+
+```bash
+# デフォルト設定ファイル（agenda-config.yaml）で実行
+npm run agenda:batch
+
+# カスタム設定ファイルを指定
+npm run agenda:batch -- --config custom-config.yaml
+
+# ドライラン（実際には生成しない）
+npm run agenda:batch -- --dry-run
+
+# 詳細出力
+npm run agenda:batch -- --verbose
+```
+
+### 3. コマンドラインオプション
+
+| オプション | 短縮形 | 説明 |
+|----------|--------|------|
+| `--config <path>` | `-c` | 設定ファイルのパス（デフォルト: `agenda-config.yaml`） |
+| `--dry-run` | `-d` | ドライラン（実際の生成は行わない） |
+| `--verbose` | `-v` | 詳細出力を有効化 |
+| `--help` | `-h` | ヘルプを表示 |
+
+### 4. 出力
+
+バッチ実行時の出力は以下のようになります：
+
+```text
+output/
+  batch_20241115_143022/
+    agenda_佐藤太郎_2024-11-15.md
+    agenda_田中花子_2024-11-15.md
+    agenda_山田一郎_2024-11-15.md
+    summary.md  # 実行結果のサマリー
+```
+
+`summary.md`には以下の情報が含まれます：
+- 生成日時
+- 総メンバー数、成功数、失敗数
+- 成功したメンバー一覧（処理時間付き）
+- 失敗したメンバー一覧（エラー内容付き）
+- 統計情報（平均処理時間、総処理時間）
+
 ## 開発
 
 ```bash
