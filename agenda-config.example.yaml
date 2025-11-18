@@ -1,0 +1,40 @@
+# 1on1アジェンダ バッチ生成設定
+#
+# 使い方:
+#   1. このファイルを `agenda-config.yaml` にコピー
+#   2. メンバー情報を編集
+#   3. `npm run agenda:batch` で実行
+
+members:
+  # 開発チーム
+  - name: 佐藤太郎
+    period:
+      weeks: 2  # 隔週1on1
+
+  - name: 鈴木一郎
+    period:
+      weeks: 2
+
+  # バックオフィス
+  - name: 田中花子
+    period:
+      months: 1  # 月次1on1
+
+  # 英語名で登録されているメンバー
+  # 注意: Backlogの登録名と一致させる必要があります
+  - name: Taro Yamada
+    period:
+      days: 14
+
+options:
+  # 最大並列実行数（API rate limit対策）
+  # デフォルト: 3
+  maxConcurrency: 3
+
+  # エラー発生時も続行するか
+  # デフォルト: true
+  continueOnError: true
+
+  # 出力ディレクトリ
+  # デフォルト: output
+  outputDir: output
