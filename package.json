@@ -1,0 +1,40 @@
+{
+  "name": "one-on-one-agent",
+  "version": "0.1.0",
+  "description": "1on1 agenda generation agent using Claude and Backlog MCP",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "agenda": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "agenda": "node dist/cli.js"
+  },
+  "keywords": [
+    "1on1",
+    "agenda",
+    "backlog",
+    "claude",
+    "mcp"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
