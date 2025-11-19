@@ -320,6 +320,45 @@ describe('OneOnOneAgendaAgent', () => {
 
       expect(result.metadata.issueCount).toBe(3);
     });
+
+    it('ドライランモード: LLMを呼び出さずにプレビューを生成する', async () => {
+      const member = {
+        id: '1',
+        name: '佐藤太郎',
+        mailAddress: 'sato@example.com',
+      };
+      const periodParams = { weeks: 2 };
+
+      // BacklogClient の getIssuesByAssignee のモック
+      mockBacklogClient.getIssuesByAssignee.mockResolvedValue([
+        {
+          id: '101',
+          key: 'TEST-1',
+          title: 'テスト課題',
+          type: 'タスク',
+          status: '完了',
+          project: '1',
+          url: 'https://test.backlog.com/view/TEST-1',
+          updatedAt: '2024-11-10T10:00:00Z',
+          createdAt: '2024-11-01T10:00:00Z',
+          priority: '中',
+        },
+      ]);
+
+      // BacklogClient の getPullRequestsByCreator のモック
+      mockBacklogClient.getPullRequestsByCreator.mockResolvedValue([]);
+
+      // generateAgendaWithParams を dryRun: true で呼び出し
+      const result = await agent.generateAgendaWithParams(member, periodParams, { dryRun: true });
+
+      // AgendaGenerator.generate が呼ばれていないことを確認
+      expect(mockAgendaGenerator.generate).not.toHaveBeenCalled();
+
+      // 出力内容の検証
+      expect(result.markdown).toContain('# [Dry Run] Data Preview');
+      expect(result.markdown).toContain('TEST-1: テスト課題');
+      expect(result.metadata.issueCount).toBe(1);
+    });
   });
 
   describe('エラーハンドリング', () => {

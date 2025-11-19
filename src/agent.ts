@@ -74,7 +74,8 @@ export class OneOnOneAgendaAgent {
    */
   async generateAgendaWithParams(
     member: { id: string; name: string },
-    periodParams: { weeks?: number; months?: number; days?: number }
+    periodParams: { weeks?: number; months?: number; days?: number },
+    options?: { dryRun?: boolean }
   ): Promise<AgendaOutput> {
     // 期間計算
     const period = this.calculatePeriod(periodParams);
@@ -115,8 +116,14 @@ export class OneOnOneAgendaAgent {
       },
     };
 
-    // アジェンダ生成
-    const markdown = await this.agendaGenerator.generate(agendaInput);
+    let markdown: string;
+
+    if (options?.dryRun) {
+      markdown = this.generateDryRunOutput(agendaInput);
+    } else {
+      // アジェンダ生成
+      markdown = await this.agendaGenerator.generate(agendaInput);
+    }
 
     // AgendaOutput作成
     return {
@@ -130,6 +137,35 @@ export class OneOnOneAgendaAgent {
         issueCount: issues.length,
       },
     };
+  }
+
+  /**
+   * ドライラン用の出力を生成する
+   */
+  private generateDryRunOutput(input: AgendaInput): string {
+    let output = `# [Dry Run] Data Preview: ${input.member.name}\n\n`;
+    output += `**Period**: ${input.period.start} - ${input.period.end}\n\n`;
+
+    output += `## Issues (${input.backlog.issues.length})\n`;
+    if (input.backlog.issues.length === 0) {
+      output += `- No issues found.\n`;
+    } else {
+      for (const issue of input.backlog.issues) {
+        output += `- [${issue.status}] ${issue.key}: ${issue.title} (${issue.url})\n`;
+      }
+    }
+    output += `\n`;
+
+    output += `## Pull Requests (${input.backlog.pullRequests.length})\n`;
+    if (input.backlog.pullRequests.length === 0) {
+      output += `- No pull requests found.\n`;
+    } else {
+      for (const pr of input.backlog.pullRequests) {
+        output += `- [${pr.status}] ${pr.repositoryName} #${pr.number}: ${pr.title} (${pr.url})\n`;
+      }
+    }
+
+    return output;
   }
 
   /**
