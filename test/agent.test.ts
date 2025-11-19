@@ -12,43 +12,52 @@ vi.mock('../src/config.js', () => ({
     anthropic: {
       apiKey: 'test-anthropic-key',
     },
+    gemini: {
+      apiKey: 'test-gemini-key',
+    },
+    llmProvider: 'claude',
   }),
 }));
 
-// Anthropic SDK をモック
-const mockMessagesCreate = vi.fn();
+import { BacklogClient } from '../src/backlog/client.js';
+import { ParameterParser } from '../src/llm/parameter-parser.js';
+import { AgendaGenerator } from '../src/llm/agenda-generator.js';
 
-vi.mock('@anthropic-ai/sdk', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    messages: {
-      create: mockMessagesCreate,
-    },
-  })),
-}));
-
-// MCP Client をモック
-const mockCallTool = vi.fn();
-const mockConnect = vi.fn();
-const mockClose = vi.fn();
-
-vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
-  Client: vi.fn().mockImplementation(() => ({
-    callTool: mockCallTool,
-    connect: mockConnect,
-    close: mockClose,
-  })),
-}));
-
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
-  StdioClientTransport: vi.fn(),
-}));
+// 依存クラスのモック化
+vi.mock('../src/backlog/client.js');
+vi.mock('../src/llm/parameter-parser.js');
+vi.mock('../src/llm/agenda-generator.js');
 
 describe('OneOnOneAgendaAgent', () => {
   let agent: OneOnOneAgendaAgent;
+  let mockBacklogClient: any;
+  let mockParameterParser: any;
+  let mockAgendaGenerator: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    agent = new OneOnOneAgendaAgent();
+
+    // モックインスタンスの作成
+    mockBacklogClient = new BacklogClient();
+    mockParameterParser = new ParameterParser();
+    mockAgendaGenerator = new AgendaGenerator();
+
+    // メソッドのモック化
+    mockBacklogClient.connect = vi.fn();
+    mockBacklogClient.disconnect = vi.fn();
+    mockBacklogClient.findUserByName = vi.fn();
+    mockBacklogClient.getIssuesByAssignee = vi.fn();
+    mockBacklogClient.getPullRequestsByCreator = vi.fn();
+
+    mockParameterParser.parse = vi.fn();
+
+    mockAgendaGenerator.generate = vi.fn();
+
+    agent = new OneOnOneAgendaAgent(
+      mockBacklogClient,
+      mockParameterParser,
+      mockAgendaGenerator
+    );
   });
 
   afterEach(async () => {
@@ -58,85 +67,41 @@ describe('OneOnOneAgendaAgent', () => {
   describe('generateAgenda', () => {
     it('正常フロー: 入力からアジェンダ生成まで完了する', async () => {
       // ParameterParser のモック（パラメータ抽出）
-      mockMessagesCreate.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              memberName: '佐藤',
-              period: { weeks: 2 },
-            }),
-          },
-        ],
+      mockParameterParser.parse.mockResolvedValue({
+        memberName: '佐藤',
+        period: { weeks: 2 },
       });
 
-      // BacklogClient の get_myself のモック（名前がマッチしない）
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: 999,
-              name: 'Test User',
-              mailAddress: 'test@example.com',
-            }),
-          },
-        ],
-      });
+      // BacklogClient の findUserByName のモック
+      mockBacklogClient.findUserByName.mockResolvedValue([{
+        id: '1',
+        name: '佐藤太郎',
+        mailAddress: 'sato@example.com',
+      }]);
 
-      // BacklogClient の get_users のモック
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([
-              { id: 1, name: '佐藤太郎', mailAddress: 'sato@example.com' },
-            ]),
-          },
-        ],
-      });
+      // BacklogClient の getIssuesByAssignee のモック
+      mockBacklogClient.getIssuesByAssignee.mockResolvedValue([
+        {
+          id: '101',
+          key: 'TEST-1',
+          title: 'テスト課題',
+          type: 'タスク',
+          status: '完了',
+          project: '1',
+          url: 'https://test.backlog.com/view/TEST-1',
+          updatedAt: '2024-11-10T10:00:00Z',
+          createdAt: '2024-11-01T10:00:00Z',
+          priority: '中',
+        },
+      ]);
 
-      // BacklogClient の get_issues のモック
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([
-              {
-                id: 101,
-                projectId: 1,
-                issueKey: 'TEST-1',
-                summary: 'テスト課題',
-                issueType: { name: 'タスク' },
-                status: { name: '完了' },
-                priority: { name: '中' },
-                updated: '2024-11-10T10:00:00Z',
-                created: '2024-11-01T10:00:00Z',
-              },
-            ]),
-          },
-        ],
-      });
-
-      // BacklogClient の get_git_repositories のモック（PRなし）
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([]),
-          },
-        ],
-      });
+      // BacklogClient の getPullRequestsByCreator のモック
+      mockBacklogClient.getPullRequestsByCreator.mockResolvedValue([]);
 
       // AgendaGenerator のモック
-      mockMessagesCreate.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: '# 1on1 アジェンダ: 佐藤太郎\n\n## 最近のハイライト（成果）\n\nテスト課題完了',
-          },
-        ],
-      });
+      mockAgendaGenerator.generate.mockResolvedValue(
+        '# 1on1 アジェンダ: 佐藤太郎\n\n## 最近のハイライト（成果）\n\nテスト課題完了'
+      );
 
       const input = '佐藤さんの直近2週間の1on1アジェンダを作成して';
 
@@ -158,53 +123,23 @@ describe('OneOnOneAgendaAgent', () => {
 
     it('生成されたMarkdownに必須セクションが含まれる', async () => {
       // ParameterParser のモック
-      mockMessagesCreate.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              memberName: '田中',
-              period: { weeks: 1 },
-            }),
-          },
-        ],
+      mockParameterParser.parse.mockResolvedValue({
+        memberName: '田中',
+        period: { weeks: 1 },
       });
 
-      // BacklogClient の get_myself のモック（名前がマッチしない）
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: 999,
-              name: 'Test User',
-              mailAddress: 'test@example.com',
-            }),
-          },
-        ],
-      });
+      // BacklogClient の findUserByName のモック
+      mockBacklogClient.findUserByName.mockResolvedValue([{
+        id: '2',
+        name: '田中花子',
+        mailAddress: 'tanaka@example.com',
+      }]);
 
-      // BacklogClient の get_users のモック
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([
-              { id: 2, name: '田中花子', mailAddress: 'tanaka@example.com' },
-            ]),
-          },
-        ],
-      });
+      // BacklogClient の getIssuesByAssignee のモック
+      mockBacklogClient.getIssuesByAssignee.mockResolvedValue([]);
 
-      // BacklogClient の get_issues のモック
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([]),
-          },
-        ],
-      });
+      // BacklogClient の getPullRequestsByCreator のモック
+      mockBacklogClient.getPullRequestsByCreator.mockResolvedValue([]);
 
       // AgendaGenerator のモック
       const mockMarkdown = `# 1on1 アジェンダ: 田中花子
@@ -238,15 +173,7 @@ describe('OneOnOneAgendaAgent', () => {
 
 （1on1中の記録用）
 `;
-
-      mockMessagesCreate.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: mockMarkdown,
-          },
-        ],
-      });
+      mockAgendaGenerator.generate.mockResolvedValue(mockMarkdown);
 
       const input = '田中さんの直近1週間';
 
@@ -263,63 +190,26 @@ describe('OneOnOneAgendaAgent', () => {
 
     it('メンバー名がメタデータに正しく設定される', async () => {
       // ParameterParser のモック
-      mockMessagesCreate.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              memberName: '山田',
-              period: { weeks: 2 },
-            }),
-          },
-        ],
+      mockParameterParser.parse.mockResolvedValue({
+        memberName: '山田',
+        period: { weeks: 2 },
       });
 
-      // BacklogClient の get_myself のモック（名前がマッチしない）
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: 999,
-              name: 'Test User',
-              mailAddress: 'test@example.com',
-            }),
-          },
-        ],
-      });
+      // BacklogClient の findUserByName のモック
+      mockBacklogClient.findUserByName.mockResolvedValue([{
+        id: '3',
+        name: '山田次郎',
+        mailAddress: 'yamada@example.com',
+      }]);
 
-      // BacklogClient の get_users のモック
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([
-              { id: 3, name: '山田次郎', mailAddress: 'yamada@example.com' },
-            ]),
-          },
-        ],
-      });
+      // BacklogClient の getIssuesByAssignee のモック
+      mockBacklogClient.getIssuesByAssignee.mockResolvedValue([]);
 
-      // BacklogClient の get_issues のモック
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([]),
-          },
-        ],
-      });
+      // BacklogClient の getPullRequestsByCreator のモック
+      mockBacklogClient.getPullRequestsByCreator.mockResolvedValue([]);
 
       // AgendaGenerator のモック
-      mockMessagesCreate.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: '# 1on1 アジェンダ: 山田次郎',
-          },
-        ],
-      });
+      mockAgendaGenerator.generate.mockResolvedValue('# 1on1 アジェンダ: 山田次郎');
 
       const input = '山田さんの直近2週間';
 
@@ -330,63 +220,26 @@ describe('OneOnOneAgendaAgent', () => {
 
     it('期間が正しく計算される（2週間）', async () => {
       // ParameterParser のモック
-      mockMessagesCreate.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              memberName: '鈴木',
-              period: { weeks: 2 },
-            }),
-          },
-        ],
+      mockParameterParser.parse.mockResolvedValue({
+        memberName: '鈴木',
+        period: { weeks: 2 },
       });
 
-      // BacklogClient の get_myself のモック（名前がマッチしない）
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: 999,
-              name: 'Test User',
-              mailAddress: 'test@example.com',
-            }),
-          },
-        ],
-      });
+      // BacklogClient の findUserByName のモック
+      mockBacklogClient.findUserByName.mockResolvedValue([{
+        id: '4',
+        name: '鈴木一郎',
+        mailAddress: 'suzuki@example.com',
+      }]);
 
-      // BacklogClient の get_users のモック
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([
-              { id: 4, name: '鈴木一郎', mailAddress: 'suzuki@example.com' },
-            ]),
-          },
-        ],
-      });
+      // BacklogClient の getIssuesByAssignee のモック
+      mockBacklogClient.getIssuesByAssignee.mockResolvedValue([]);
 
-      // BacklogClient の get_issues のモック
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([]),
-          },
-        ],
-      });
+      // BacklogClient の getPullRequestsByCreator のモック
+      mockBacklogClient.getPullRequestsByCreator.mockResolvedValue([]);
 
       // AgendaGenerator のモック
-      mockMessagesCreate.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: '# 1on1 アジェンダ: 鈴木一郎',
-          },
-        ],
-      });
+      mockAgendaGenerator.generate.mockResolvedValue('# 1on1 アジェンダ: 鈴木一郎');
 
       const input = '鈴木さんの直近2週間';
 
@@ -403,107 +256,63 @@ describe('OneOnOneAgendaAgent', () => {
 
     it('課題数がメタデータに正しく設定される', async () => {
       // ParameterParser のモック
-      mockMessagesCreate.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              memberName: '高橋',
-              period: { weeks: 2 },
-            }),
-          },
-        ],
+      mockParameterParser.parse.mockResolvedValue({
+        memberName: '高橋',
+        period: { weeks: 2 },
       });
 
-      // BacklogClient の get_myself のモック（名前がマッチしない）
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: 999,
-              name: 'Test User',
-              mailAddress: 'test@example.com',
-            }),
-          },
-        ],
-      });
+      // BacklogClient の findUserByName のモック
+      mockBacklogClient.findUserByName.mockResolvedValue([{
+        id: '5',
+        name: '高橋美咲',
+        mailAddress: 'takahashi@example.com',
+      }]);
 
-      // BacklogClient の get_users のモック
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([
-              { id: 5, name: '高橋美咲', mailAddress: 'takahashi@example.com' },
-            ]),
-          },
-        ],
-      });
+      // BacklogClient の getIssuesByAssignee のモック（3件の課題）
+      mockBacklogClient.getIssuesByAssignee.mockResolvedValue([
+        {
+          id: '101',
+          key: 'TEST-1',
+          title: '課題1',
+          type: 'タスク',
+          status: '完了',
+          project: '1',
+          url: 'https://test.backlog.com/view/TEST-1',
+          updatedAt: '2024-11-10T10:00:00Z',
+          createdAt: '2024-11-01T10:00:00Z',
+          priority: '中',
+        },
+        {
+          id: '102',
+          key: 'TEST-2',
+          title: '課題2',
+          type: 'バグ',
+          status: '処理中',
+          project: '1',
+          url: 'https://test.backlog.com/view/TEST-2',
+          updatedAt: '2024-11-11T10:00:00Z',
+          createdAt: '2024-11-02T10:00:00Z',
+          priority: '高',
+        },
+        {
+          id: '103',
+          key: 'TEST-3',
+          title: '課題3',
+          type: '機能',
+          status: '未処理',
+          project: '1',
+          url: 'https://test.backlog.com/view/TEST-3',
+          updatedAt: '2024-11-12T10:00:00Z',
+          createdAt: '2024-11-03T10:00:00Z',
+          priority: '低',
+        },
+      ]);
 
-      // BacklogClient の get_issues のモック（3件の課題）
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([
-              {
-                id: 101,
-                projectId: 1,
-                issueKey: 'TEST-1',
-                summary: '課題1',
-                issueType: { name: 'タスク' },
-                status: { name: '完了' },
-                priority: { name: '中' },
-                updated: '2024-11-10T10:00:00Z',
-                created: '2024-11-01T10:00:00Z',
-              },
-              {
-                id: 102,
-                projectId: 1,
-                issueKey: 'TEST-2',
-                summary: '課題2',
-                issueType: { name: 'バグ' },
-                status: { name: '処理中' },
-                priority: { name: '高' },
-                updated: '2024-11-11T10:00:00Z',
-                created: '2024-11-02T10:00:00Z',
-              },
-              {
-                id: 103,
-                projectId: 1,
-                issueKey: 'TEST-3',
-                summary: '課題3',
-                issueType: { name: '機能' },
-                status: { name: '未処理' },
-                priority: { name: '低' },
-                updated: '2024-11-12T10:00:00Z',
-                created: '2024-11-03T10:00:00Z',
-              },
-            ]),
-          },
-        ],
-      });
-
-      // BacklogClient の get_git_repositories のモック（PRなし）
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([]),
-          },
-        ],
-      });
+      // BacklogClient の getPullRequestsByCreator のモック
+      mockBacklogClient.getPullRequestsByCreator.mockResolvedValue([]);
 
       // AgendaGenerator のモック
-      mockMessagesCreate.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: '# 1on1 アジェンダ: 高橋美咲',
-          },
-        ],
-      });
+      mockAgendaGenerator.generate.mockResolvedValue('# 1on1 アジェンダ: 高橋美咲');
 
       const input = '高橋さんの直近2週間';
 
@@ -516,44 +325,13 @@ describe('OneOnOneAgendaAgent', () => {
   describe('エラーハンドリング', () => {
     it('メンバーが見つからない場合、適切なエラーメッセージ', async () => {
       // ParameterParser のモック
-      mockMessagesCreate.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              memberName: '存在しないユーザー',
-              period: { weeks: 2 },
-            }),
-          },
-        ],
+      mockParameterParser.parse.mockResolvedValue({
+        memberName: '存在しないユーザー',
+        period: { weeks: 2 },
       });
 
-      // BacklogClient の get_myself のモック（名前がマッチしない）
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: 999,
-              name: 'Test User',
-              mailAddress: 'test@example.com',
-            }),
-          },
-        ],
-      });
-
-      // BacklogClient の get_users のモック（該当ユーザーなし）
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([
-              { id: 1, name: '佐藤太郎', mailAddress: 'sato@example.com' },
-              { id: 2, name: '田中花子', mailAddress: 'tanaka@example.com' },
-            ]),
-          },
-        ],
-      });
+      // BacklogClient の findUserByName のモック（該当なし）
+      mockBacklogClient.findUserByName.mockResolvedValue([]);
 
       const input = '存在しないユーザーさんの直近2週間';
 
@@ -562,45 +340,16 @@ describe('OneOnOneAgendaAgent', () => {
 
     it('複数メンバーがマッチする場合、適切なエラーメッセージ', async () => {
       // ParameterParser のモック
-      mockMessagesCreate.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              memberName: 'a',
-              period: { weeks: 2 },
-            }),
-          },
-        ],
+      mockParameterParser.parse.mockResolvedValue({
+        memberName: 'a',
+        period: { weeks: 2 },
       });
 
-      // BacklogClient の get_myself のモック（名前がマッチしない）
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: 999,
-              name: 'Test User',
-              mailAddress: 'test@example.com',
-            }),
-          },
-        ],
-      });
-
-      // BacklogClient の get_users のモック（複数マッチ）
-      mockCallTool.mockResolvedValueOnce({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify([
-              { id: 1, name: 'alice', mailAddress: 'alice@example.com' },
-              { id: 2, name: 'alan', mailAddress: 'alan@example.com' },
-              { id: 3, name: 'amanda', mailAddress: 'amanda@example.com' },
-            ]),
-          },
-        ],
-      });
+      // BacklogClient の findUserByName のモック（複数ヒット）
+      mockBacklogClient.findUserByName.mockResolvedValue([
+        { id: '1', name: 'alice', mailAddress: 'alice@example.com' },
+        { id: '2', name: 'alan', mailAddress: 'alan@example.com' },
+      ]);
 
       const input = 'aの直近2週間';
 

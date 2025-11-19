@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { AgendaGenerator } from '../../src/claude/agenda-generator.js';
+import { AgendaGenerator } from '../../src/llm/agenda-generator.js';
 import type { AgendaInput } from '../../src/model/agenda.js';
+
+// LLM Factoryをモック
+const mockGenerateText = vi.fn();
+vi.mock('../../src/llm/factory.js', () => ({
+  createLLMClient: () => ({
+    generateText: mockGenerateText,
+  }),
+}));
 
 // config.ts をモック
 vi.mock('../../src/config.js', () => ({
@@ -13,17 +21,6 @@ vi.mock('../../src/config.js', () => ({
       apiKey: 'test-anthropic-key',
     },
   }),
-}));
-
-// Anthropic SDK をモック
-const mockMessagesCreate = vi.fn();
-
-vi.mock('@anthropic-ai/sdk', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    messages: {
-      create: mockMessagesCreate,
-    },
-  })),
 }));
 
 describe('AgendaGenerator', () => {
@@ -68,14 +65,7 @@ describe('AgendaGenerator', () => {
 （1on1中の記録用）
 `;
 
-      mockMessagesCreate.mockResolvedValue({
-        content: [
-          {
-            type: 'text',
-            text: mockMarkdown,
-          },
-        ],
-      });
+      mockGenerateText.mockResolvedValue(mockMarkdown);
 
       const input: AgendaInput = {
         member: {
@@ -120,18 +110,11 @@ describe('AgendaGenerator', () => {
       expect(markdown).toBeTruthy();
       expect(typeof markdown).toBe('string');
       expect(markdown.length).toBeGreaterThan(0);
-      expect(mockMessagesCreate).toHaveBeenCalledOnce();
+      expect(mockGenerateText).toHaveBeenCalledOnce();
     });
 
     it('課題が少ない場合（1件）でもエラーにならない', async () => {
-      mockMessagesCreate.mockResolvedValue({
-        content: [
-          {
-            type: 'text',
-            text: '# 1on1 アジェンダ: 田中花子\n\n## 最近のハイライト（成果）\n\n- ドキュメント更新完了',
-          },
-        ],
-      });
+      mockGenerateText.mockResolvedValue('# 1on1 アジェンダ: 田中花子\n\n## 最近のハイライト（成果）\n\n- ドキュメント更新完了');
 
       const input: AgendaInput = {
         member: {
@@ -166,14 +149,7 @@ describe('AgendaGenerator', () => {
     });
 
     it('課題が0件の場合でもエラーにならない', async () => {
-      mockMessagesCreate.mockResolvedValue({
-        content: [
-          {
-            type: 'text',
-            text: '# 1on1 アジェンダ: 山田次郎\n\n**期間**: 2024-11-01 〜 2024-11-15\n\n## 最近のハイライト（成果）\n\n課題の更新がありませんでした。',
-          },
-        ],
-      });
+      mockGenerateText.mockResolvedValue('# 1on1 アジェンダ: 山田次郎\n\n**期間**: 2024-11-01 〜 2024-11-15\n\n## 最近のハイライト（成果）\n\n課題の更新がありませんでした。');
 
       const input: AgendaInput = {
         member: {
@@ -229,14 +205,7 @@ describe('AgendaGenerator', () => {
 （1on1中の記録用）
 `;
 
-      mockMessagesCreate.mockResolvedValue({
-        content: [
-          {
-            type: 'text',
-            text: mockMarkdown,
-          },
-        ],
-      });
+      mockGenerateText.mockResolvedValue(mockMarkdown);
 
       const input: AgendaInput = {
         member: {
@@ -311,14 +280,7 @@ describe('AgendaGenerator', () => {
 （1on1中の記録用）
 `;
 
-      mockMessagesCreate.mockResolvedValue({
-        content: [
-          {
-            type: 'text',
-            text: mockMarkdown,
-          },
-        ],
-      });
+      mockGenerateText.mockResolvedValue(mockMarkdown);
 
       const input: AgendaInput = {
         member: {
@@ -377,22 +339,18 @@ describe('AgendaGenerator', () => {
       expect(markdown).toBeTruthy();
       expect(typeof markdown).toBe('string');
       expect(markdown.length).toBeGreaterThan(0);
-      expect(mockMessagesCreate).toHaveBeenCalledOnce();
+      expect(mockGenerateText).toHaveBeenCalledOnce();
 
       // プロンプトにPR情報が含まれていることを確認
-      const callArgs = mockMessagesCreate.mock.calls[0][0];
-      const userPrompt = callArgs.messages[0].content;
+      const callArgs = mockGenerateText.mock.calls[0];
+      const userPrompt = callArgs[1]; // 2nd argument is userPrompt
       expect(userPrompt).toContain('プルリクエスト一覧');
       expect(userPrompt).toContain('新機能追加');
       expect(userPrompt).toContain('Merged');
     });
 
     it('課題が0件でPRのみの場合でもエラーにならない', async () => {
-      mockMessagesCreate.mockResolvedValue({
-        content: [
-          {
-            type: 'text',
-            text: `# 1on1 アジェンダ: 高橋花子
+      mockGenerateText.mockResolvedValue(`# 1on1 アジェンダ: 高橋花子
 
 **期間**: 2024-11-01 〜 2024-11-15
 
@@ -420,10 +378,7 @@ PR活動が活発
 ## メモ欄
 
 （1on1中の記録用）
-`,
-          },
-        ],
-      });
+`);
 
       const input: AgendaInput = {
         member: {

@@ -34,6 +34,10 @@ export interface AppConfig {
   anthropic: {
     apiKey: string;
   };
+  gemini: {
+    apiKey?: string;
+  };
+  llmProvider: 'claude' | 'gemini';
 }
 
 /**
@@ -42,7 +46,9 @@ export interface AppConfig {
  * @throws Error 必須環境変数が不足している場合
  */
 export function loadConfig(): AppConfig {
-  return {
+  const llmProvider = (process.env.LLM_PROVIDER === 'gemini' ? 'gemini' : 'claude');
+
+  const config: AppConfig = {
     backlog: {
       domain: getRequiredEnv(
         'BACKLOG_DOMAIN',
@@ -54,12 +60,23 @@ export function loadConfig(): AppConfig {
       ),
     },
     anthropic: {
-      apiKey: getRequiredEnv(
-        'ANTHROPIC_API_KEY',
-        'Anthropic API キー（https://console.anthropic.com/ から取得）'
-      ),
+      apiKey: process.env.ANTHROPIC_API_KEY || '',
     },
+    gemini: {
+      apiKey: process.env.GEMINI_API_KEY,
+    },
+    llmProvider,
   };
+
+  // プロバイダーに応じた必須チェック
+  if (llmProvider === 'claude' && !config.anthropic.apiKey) {
+    getRequiredEnv('ANTHROPIC_API_KEY', 'Anthropic API キー');
+  }
+  if (llmProvider === 'gemini' && !config.gemini.apiKey) {
+    getRequiredEnv('GEMINI_API_KEY', 'Gemini API キー');
+  }
+
+  return config;
 }
 
 /**
