@@ -1,0 +1,8 @@
+members:
+  - name: Test User
+    period:
+      weeks: 1
+options:
+  maxConcurrency: 1
+  continueOnError: true
+  outputDir: test-output

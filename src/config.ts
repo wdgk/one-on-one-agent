@@ -38,6 +38,13 @@ export interface AppConfig {
     apiKey?: string;
   };
   llmProvider: 'claude' | 'gemini';
+  options?: {
+    maxConcurrency?: number;
+    continueOnError?: boolean;
+    outputDir?: string;
+    dryRun?: boolean;
+    templateDir?: string;
+  };
 }
 
 /**

@@ -25,6 +25,20 @@ async function main() {
       args.splice(dryRunIndex, 1);
     }
 
+    // --template-dir フラグの検出と除去
+    const templateDirIndex = args.indexOf('--template-dir');
+    let templateDir: string | undefined;
+
+    if (templateDirIndex !== -1) {
+      if (templateDirIndex + 1 < args.length) {
+        templateDir = args[templateDirIndex + 1];
+        args.splice(templateDirIndex, 2);
+      } else {
+        console.error('❌ --template-dir オプションにはディレクトリパスが必要です');
+        process.exit(1);
+      }
+    }
+
     let inputText = args.join(' ');
 
     // 引数がない場合は対話モード
@@ -92,7 +106,10 @@ async function main() {
 
     // アジェンダ生成
     console.log('🤖 アジェンダを生成中...');
-    const result = await agent.generateAgendaWithParams(targetMember, parsed.period, { dryRun: isDryRun });
+    const result = await agent.generateAgendaWithParams(targetMember, parsed.period, {
+      dryRun: isDryRun,
+      templateDir: templateDir
+    });
 
     console.log('✅ アジェンダ生成完了！\n');
 

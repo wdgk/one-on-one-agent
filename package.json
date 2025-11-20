@@ -8,7 +8,7 @@
     "agenda": "./dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/templates && cp src/templates/*.hbs dist/templates/",
     "dev": "tsc --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",
@@ -30,6 +30,7 @@
     "@google/generative-ai": "^0.24.1",
     "@modelcontextprotocol/sdk": "^1.0.4",
     "dotenv": "^17.2.3",
+    "handlebars": "^4.7.8",
     "js-yaml": "^4.1.1",
     "prompts": "^2.4.2",
     "zod": "^4.1.12"

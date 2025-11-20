@@ -27,6 +27,7 @@ export interface BatchOptions {
   maxConcurrency: number;
   continueOnError: boolean;
   outputDir: string;
+  dryRun?: boolean;
 }
 
 /**

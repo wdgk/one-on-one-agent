@@ -28,7 +28,8 @@ export class BatchAgendaGenerator {
     // 各メンバーのアジェンダを並列生成
     const results = await this.generateParallel(
       config.members,
-      config.options.maxConcurrency
+      config.options.maxConcurrency,
+      config.options.dryRun
     );
 
     // 各メンバーのアジェンダをファイルに保存
@@ -63,7 +64,8 @@ export class BatchAgendaGenerator {
    */
   private async generateParallel(
     members: Member[],
-    maxConcurrency: number
+    maxConcurrency: number,
+    dryRun?: boolean
   ): Promise<MemberResult[]> {
     const results: MemberResult[] = [];
 
@@ -72,7 +74,7 @@ export class BatchAgendaGenerator {
       const chunk = members.slice(i, i + maxConcurrency);
 
       const promises = chunk.map((member) =>
-        this.generateForMember(member).catch((error) => ({
+        this.generateForMember(member, dryRun).catch((error) => ({
           memberName: member.name,
           status: 'error' as const,
           error: error instanceof Error ? error.message : String(error),
@@ -92,7 +94,7 @@ export class BatchAgendaGenerator {
    * @param member メンバー情報
    * @returns メンバーの生成結果
    */
-  private async generateForMember(member: Member): Promise<MemberResult> {
+  private async generateForMember(member: Member, dryRun?: boolean): Promise<MemberResult> {
     const startTime = Date.now();
 
     try {
@@ -101,7 +103,7 @@ export class BatchAgendaGenerator {
       const inputText = `${member.name}の${periodText}`;
 
       // アジェンダ生成
-      const output = await this.agent.generateAgenda(inputText);
+      const output = await this.agent.generateAgenda(inputText, { dryRun });
 
       const duration = Date.now() - startTime;
 

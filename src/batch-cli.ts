@@ -57,10 +57,10 @@ async function main() {
     }
     console.log();
 
-    // ドライランの場合はここで終了
+    // ドライランの設定を反映
     if (dryRun) {
-      console.log('🔍 ドライラン: 実際の生成は行いません');
-      return;
+      console.log('🔍 ドライラン: LLM生成をスキップしてデータを取得します');
+      config.options.dryRun = true;
     }
 
     // バッチ生成を実行

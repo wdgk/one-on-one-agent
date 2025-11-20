@@ -28,7 +28,7 @@ export class OneOnOneAgendaAgent {
    * @param inputText ユーザーの入力テキスト
    * @returns 生成されたアジェンダ
    */
-  async generateAgenda(inputText: string): Promise<AgendaOutput> {
+  async generateAgenda(inputText: string, options?: { dryRun?: boolean; templateDir?: string }): Promise<AgendaOutput> {
     // 1. パラメータ抽出
     const parsed = await this.parseInput(inputText);
 
@@ -49,7 +49,7 @@ export class OneOnOneAgendaAgent {
     }
 
     // 4. アジェンダ生成
-    return this.generateAgendaWithParams(members[0], parsed.period);
+    return this.generateAgendaWithParams(members[0], parsed.period, options);
   }
 
   /**
@@ -75,7 +75,7 @@ export class OneOnOneAgendaAgent {
   async generateAgendaWithParams(
     member: { id: string; name: string },
     periodParams: { weeks?: number; months?: number; days?: number },
-    options?: { dryRun?: boolean }
+    options?: { dryRun?: boolean; templateDir?: string }
   ): Promise<AgendaOutput> {
     // 期間計算
     const period = this.calculatePeriod(periodParams);
@@ -122,7 +122,14 @@ export class OneOnOneAgendaAgent {
       markdown = this.generateDryRunOutput(agendaInput);
     } else {
       // アジェンダ生成
-      markdown = await this.agendaGenerator.generate(agendaInput);
+      // テンプレートディレクトリが指定されている場合は、そのためのGeneratorを使用するか、
+      // 既存のGeneratorに一時的にパスを渡す必要がある。
+      // ここでは、options.templateDirがある場合、新しいGeneratorを作成する（コストは低い）
+      const generator = options?.templateDir
+        ? new AgendaGenerator(options.templateDir)
+        : this.agendaGenerator;
+
+      markdown = await generator.generate(agendaInput);
     }
 
     // AgendaOutput作成
