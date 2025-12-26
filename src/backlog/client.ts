@@ -102,9 +102,29 @@ export class BacklogClient {
       'ユーザー一覧のパースに失敗しました'
     );
 
-    // 名前で部分一致検索
+    // 名前で部分一致検索（改善版）
+    // スペース区切りの各単語をチェック
+    const searchWords = name.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+
     const foundUsers = users
-      .filter((user) => user.name && user.name.includes(name))
+      .filter((user) => {
+        if (!user.name) return false;
+
+        const userName = user.name.toLowerCase();
+
+        // 単純な部分一致（従来の動作を維持）
+        if (userName.includes(name.toLowerCase())) {
+          return true;
+        }
+
+        // スペース区切りの各単語が全て含まれているかチェック
+        // 例: "Wada Gaku" → ["wada", "gaku"] → "Gaku Wada" の中に両方含まれる
+        if (searchWords.length > 1) {
+          return searchWords.every(word => userName.includes(word));
+        }
+
+        return false;
+      })
       .map((user) => ({
         id: String(user.id),
         name: user.name,
