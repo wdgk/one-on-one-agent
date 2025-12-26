@@ -1,16 +1,30 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { z } from 'zod';
 import type { ParsedParameters } from '../model/agenda.js';
-import { createAnthropicClient } from './client-factory.js';
-import { CLAUDE_API } from '../constants.js';
+import { createLLMClient } from './factory.js';
+import { LLMClient } from './types.js';
+
+/**
+ * パラメータ抽出結果のZodスキーマ
+ */
+const ParsedParametersSchema = z.object({
+  memberName: z.string().min(1, 'メンバー名は必須です'),
+  period: z.object({
+    weeks: z.number().optional(),
+    months: z.number().optional(),
+    days: z.number().optional(),
+  }).refine(data => data.weeks || data.months || data.days, {
+    message: '期間（weeks, months, days）のいずれかを指定してください',
+  }),
+});
 
 /**
  * 自然言語入力からパラメータを抽出するパーサー
  */
 export class ParameterParser {
-  private client: Anthropic;
+  private client: LLMClient;
 
   constructor() {
-    this.client = createAnthropicClient();
+    this.client = createLLMClient();
   }
 
   /**
@@ -39,25 +53,7 @@ export class ParameterParser {
 
     const userPrompt = `入力: ${inputText}`;
 
-    const message = await this.client.messages.create({
-      model: CLAUDE_API.MODEL,
-      max_tokens: CLAUDE_API.PARAMETER_PARSER_MAX_TOKENS,
-      messages: [
-        {
-          role: 'user',
-          content: userPrompt,
-        },
-      ],
-      system: systemPrompt,
-    });
-
-    // レスポンスからJSONを抽出
-    const content = message.content[0];
-    if (content.type !== 'text') {
-      throw new Error('予期しないレスポンス形式です');
-    }
-
-    const responseText = content.text;
+    const responseText = await this.client.generateText(systemPrompt, userPrompt);
 
     // JSONをパース
     try {
@@ -67,13 +63,20 @@ export class ParameterParser {
         throw new Error('JSONが見つかりません');
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
+      const parsedJson = JSON.parse(jsonMatch[0]);
+
+      // Zodでバリデーション
+      const validated = ParsedParametersSchema.parse(parsedJson);
 
       return {
-        memberName: parsed.memberName,
-        period: parsed.period,
+        memberName: validated.memberName,
+        period: validated.period,
       };
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errorMessages = error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+        throw new Error(`パラメータのバリデーションに失敗しました: ${errorMessages}`);
+      }
       throw new Error(
         `パラメータの抽出に失敗しました: ${error instanceof Error ? error.message : String(error)}`
       );

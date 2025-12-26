@@ -25,6 +25,19 @@ export type AgendaInput = {
     /** プルリクエスト一覧 */
     pullRequests: PullRequestSummary[];
   };
+  /** Slack情報 */
+  slack?: {
+    /** メッセージ一覧 */
+    messages: Array<{
+      id: string;
+      text: string;
+      user: string;
+      channel: string;
+      ts: string;
+      permalink?: string;
+      type: string;
+    }>;
+  };
 };
 
 /**

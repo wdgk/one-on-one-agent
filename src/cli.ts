@@ -3,6 +3,7 @@
 import 'dotenv/config';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
+import prompts from 'prompts';
 import { OneOnOneAgendaAgent } from './agent.js';
 import { generateAgendaFilename } from './file-helpers.js';
 
@@ -10,26 +11,75 @@ import { generateAgendaFilename } from './file-helpers.js';
  * CLIエントリーポイント
  */
 async function main() {
-  // コマンドライン引数を取得
-  const args = process.argv.slice(2);
-
-  if (args.length === 0) {
-    console.error('使い方: npm run agenda "メンバー名の直近N週間"');
-    console.error('例: npm run agenda "佐藤さんの直近2週間の1on1アジェンダを作成して"');
-    process.exit(1);
-  }
-
-  const inputText = args.join(' ');
-
-  console.log('🚀 1on1アジェンダ生成を開始します...');
-  console.log(`入力: ${inputText}\n`);
-
   const agent = new OneOnOneAgendaAgent();
 
   try {
-    // アジェンダ生成
+    // コマンドライン引数を取得
+    const args = process.argv.slice(2);
+    let inputText = args.join(' ');
+
+    // 引数がない場合は対話モード
+    if (!inputText) {
+      console.log('🚀 1on1アジェンダ生成エージェントへようこそ！\n');
+      const response = await prompts({
+        type: 'text',
+        name: 'value',
+        message: 'どのようなアジェンダを作成しますか？',
+        initial: '佐藤さんの直近2週間のアジェンダを作成して',
+      });
+
+      if (!response.value) {
+        console.log('キャンセルされました。');
+        process.exit(0);
+      }
+      inputText = response.value;
+    } else {
+      console.log('🚀 1on1アジェンダ生成を開始します...');
+      console.log(`入力: ${inputText}\n`);
+    }
+
+    // パラメータ抽出
     console.log('📝 パラメータを抽出中...');
-    const result = await agent.generateAgenda(inputText);
+    const parsed = await agent.parseInput(inputText);
+    console.log(`  メンバー名: ${parsed.memberName}`);
+    console.log(`  期間: ${JSON.stringify(parsed.period)}\n`);
+
+    // メンバー検索
+    console.log('🔍 メンバーを検索中...');
+    const members = await agent.searchMember(parsed.memberName);
+
+    let targetMember;
+
+    if (members.length === 0) {
+      console.error(`❌ ユーザーが見つかりません: ${parsed.memberName}`);
+      process.exit(1);
+    } else if (members.length === 1) {
+      targetMember = members[0];
+      console.log(`✅ メンバーを特定しました: ${targetMember.name} (${targetMember.mailAddress})\n`);
+    } else {
+      // 複数ヒットした場合は選択
+      console.log(`⚠️ 複数のユーザーがマッチしました: ${parsed.memberName}`);
+      const response = await prompts({
+        type: 'select',
+        name: 'member',
+        message: '対象のメンバーを選択してください',
+        choices: members.map(m => ({
+          title: `${m.name} (${m.mailAddress})`,
+          value: m,
+        })),
+      });
+
+      if (!response.member) {
+        console.log('キャンセルされました。');
+        process.exit(0);
+      }
+      targetMember = response.member;
+      console.log(`✅ メンバーを選択しました: ${targetMember.name}\n`);
+    }
+
+    // アジェンダ生成
+    console.log('🤖 アジェンダを生成中...');
+    const result = await agent.generateAgendaWithParams(targetMember, parsed.period);
 
     console.log('✅ アジェンダ生成完了！\n');
 

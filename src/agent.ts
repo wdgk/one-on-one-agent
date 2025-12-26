@@ -1,8 +1,10 @@
 import { BacklogClient } from './backlog/client.js';
-import { ParameterParser } from './claude/parameter-parser.js';
-import { AgendaGenerator } from './claude/agenda-generator.js';
+import { ParameterParser } from './llm/parameter-parser.js';
+import { AgendaGenerator } from './llm/agenda-generator.js';
 import type { AgendaInput, AgendaOutput } from './model/agenda.js';
 import { PERIOD_DEFAULTS, TIME } from './constants.js';
+
+import { SlackClient } from './slack/client.js';
 
 /**
  * 1on1アジェンダ生成エージェント
@@ -10,46 +12,92 @@ import { PERIOD_DEFAULTS, TIME } from './constants.js';
  */
 export class OneOnOneAgendaAgent {
   private backlogClient: BacklogClient;
+  private slackClient: SlackClient;
   private parameterParser: ParameterParser;
   private agendaGenerator: AgendaGenerator;
 
-  constructor() {
-    this.backlogClient = new BacklogClient();
-    this.parameterParser = new ParameterParser();
-    this.agendaGenerator = new AgendaGenerator();
+  constructor(
+    backlogClient?: BacklogClient,
+    parameterParser?: ParameterParser,
+    agendaGenerator?: AgendaGenerator,
+    slackClient?: SlackClient
+  ) {
+    this.backlogClient = backlogClient || new BacklogClient();
+    this.parameterParser = parameterParser || new ParameterParser();
+    this.agendaGenerator = agendaGenerator || new AgendaGenerator();
+    this.slackClient = slackClient || new SlackClient();
   }
 
   /**
-   * 自然言語入力からアジェンダを生成する
+   * 自然言語入力からアジェンダを生成する（後方互換性のため維持）
    * @param inputText ユーザーの入力テキスト
    * @returns 生成されたアジェンダ
    */
-  async generateAgenda(inputText: string): Promise<AgendaOutput> {
+  async generateAgenda(inputText: string, options?: { dryRun?: boolean; templateDir?: string }): Promise<AgendaOutput> {
     // 1. パラメータ抽出
-    const parsed = await this.parameterParser.parse(inputText);
+    const parsed = await this.parseInput(inputText);
 
     // 2. Backlog接続
     await this.backlogClient.connect();
 
     // 3. メンバー解決
-    const member = await this.backlogClient.findUserByName(parsed.memberName);
+    const members = await this.searchMember(parsed.memberName);
 
-    // 4. 期間計算
-    const period = this.calculatePeriod(parsed.period);
+    if (members.length === 0) {
+      throw new Error(`ユーザーが見つかりません: ${parsed.memberName}`);
+    }
 
-    // 5. 課題取得
+    if (members.length > 1) {
+      throw new Error(
+        `複数のユーザーがマッチしました: ${members.map((u) => u.name).join(', ')}`
+      );
+    }
+
+    // 4. アジェンダ生成
+    return this.generateAgendaWithParams(members[0], parsed.period, options);
+  }
+
+  /**
+   * 入力テキストをパースする
+   */
+  async parseInput(inputText: string) {
+    return this.parameterParser.parse(inputText);
+  }
+
+  /**
+   * メンバーを検索する
+   */
+  async searchMember(name: string) {
+    // 接続状態を確認していない場合は接続（CLIからの直接呼び出し用）
+    // 注: 本来は接続管理をより厳密に行うべきだが、簡易的な対応
+    await this.backlogClient.connect();
+    return this.backlogClient.findUserByName(name);
+  }
+
+  /**
+   * パラメータを指定してアジェンダを生成する
+   */
+  async generateAgendaWithParams(
+    member: { id: string; name: string; mailAddress?: string },
+    periodParams: { weeks?: number; months?: number; days?: number },
+    options?: { dryRun?: boolean; templateDir?: string }
+  ): Promise<AgendaOutput> {
+    // 期間計算
+    const period = this.calculatePeriod(periodParams);
+
+    // 課題取得
     const issues = await this.backlogClient.getIssuesByAssignee(
       member.id,
       period.start,
       period.end
     );
 
-    // 6. 課題から検出したプロジェクトIDのリストを抽出
+    // 課題から検出したプロジェクトIDのリストを抽出
     const projectIds = Array.from(
       new Set(issues.map(issue => issue.project).filter(id => id !== 'unknown'))
     );
 
-    // 7. プルリクエスト取得
+    // プルリクエスト取得
     const pullRequests = await this.backlogClient.getPullRequestsByCreator(
       member.id,
       projectIds,
@@ -57,7 +105,20 @@ export class OneOnOneAgendaAgent {
       period.end
     );
 
-    // 8. AgendaInput構築
+    // Slackメッセージ取得
+    let slackMessages: any[] = [];
+    if (this.slackClient.isAvailable() && member.mailAddress) {
+      const slackUserId = await this.slackClient.findUserByEmail(member.mailAddress);
+      if (slackUserId) {
+        slackMessages = await this.slackClient.getMessagesInPeriod(
+          slackUserId,
+          period.start,
+          period.end
+        );
+      }
+    }
+
+    // AgendaInput構築
     const agendaInput: AgendaInput = {
       member: {
         id: member.id,
@@ -71,13 +132,23 @@ export class OneOnOneAgendaAgent {
         issues,
         pullRequests,
       },
+      slack: {
+        messages: slackMessages,
+      },
     };
 
-    // 9. アジェンダ生成
-    const markdown = await this.agendaGenerator.generate(agendaInput);
+    let markdown: string;
 
-    // 10. AgendaOutput作成
-    const output: AgendaOutput = {
+    if (options?.dryRun) {
+      markdown = this.generateDryRunOutput(agendaInput);
+    } else {
+      // アジェンダ生成
+      // TODO: テンプレートディレクトリが指定されている場合の対応はfeature/9-externalize-agenda-templateで実装予定
+      markdown = await this.agendaGenerator.generate(agendaInput);
+    }
+
+    // AgendaOutput作成
+    return {
       markdown,
       metadata: {
         memberId: member.id,
@@ -88,6 +159,43 @@ export class OneOnOneAgendaAgent {
         issueCount: issues.length,
       },
     };
+  }
+
+  /**
+   * ドライラン用の出力を生成する
+   */
+  private generateDryRunOutput(input: AgendaInput): string {
+    let output = `# [Dry Run] Data Preview: ${input.member.name}\n\n`;
+    output += `**Period**: ${input.period.start} - ${input.period.end}\n\n`;
+
+    output += `## Issues (${input.backlog.issues.length})\n`;
+    if (input.backlog.issues.length === 0) {
+      output += `- No issues found.\n`;
+    } else {
+      for (const issue of input.backlog.issues) {
+        output += `- [${issue.status}] ${issue.key}: ${issue.title} (${issue.url})\n`;
+      }
+    }
+    output += `\n`;
+
+    output += `## Pull Requests (${input.backlog.pullRequests.length})\n`;
+    if (input.backlog.pullRequests.length === 0) {
+      output += `- No pull requests found.\n`;
+    } else {
+      for (const pr of input.backlog.pullRequests) {
+        output += `- [${pr.status}] ${pr.repositoryName} #${pr.number}: ${pr.title} (${pr.url})\n`;
+      }
+    }
+    output += `\n`;
+
+    if (input.slack && input.slack.messages.length > 0) {
+      output += `## Slack Messages (${input.slack.messages.length})\n`;
+      for (const msg of input.slack.messages) {
+        const date = new Date(parseFloat(msg.ts) * 1000).toLocaleString('ja-JP');
+        output += `- [${date}] #${msg.channel}: ${msg.text.substring(0, 50).replace(/\n/g, ' ')}...\n`;
+      }
+      output += `\n`;
+    }
 
     return output;
   }

@@ -1,16 +1,15 @@
-import Anthropic from '@anthropic-ai/sdk';
 import type { AgendaInput } from '../model/agenda.js';
-import { createAnthropicClient } from './client-factory.js';
-import { CLAUDE_API } from '../constants.js';
+import { createLLMClient } from './factory.js';
+import { LLMClient } from './types.js';
 
 /**
  * AgendaInputからMarkdownアジェンダを生成するジェネレーター
  */
 export class AgendaGenerator {
-  private client: Anthropic;
+  private client: LLMClient;
 
   constructor() {
-    this.client = createAnthropicClient();
+    this.client = createLLMClient();
   }
 
   /**
@@ -89,24 +88,6 @@ ${JSON.stringify(input.backlog.pullRequests, null, 2)}
 （1on1中の記録用）
 `;
 
-    const message = await this.client.messages.create({
-      model: CLAUDE_API.MODEL,
-      max_tokens: CLAUDE_API.AGENDA_GENERATOR_MAX_TOKENS,
-      messages: [
-        {
-          role: 'user',
-          content: userPrompt,
-        },
-      ],
-      system: systemPrompt,
-    });
-
-    // レスポンスからテキストを抽出
-    const content = message.content[0];
-    if (content.type !== 'text') {
-      throw new Error('予期しないレスポンス形式です');
-    }
-
-    return content.text;
+    return this.client.generateText(systemPrompt, userPrompt);
   }
 }

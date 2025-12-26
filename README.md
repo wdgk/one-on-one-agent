@@ -5,7 +5,7 @@ Backlogの活動データから1on1アジェンダを自動生成するCLIツー
 ## 特徴
 
 - Backlog課題・PRの自動収集（MCP経由）
-- Claude AIによる構造化アジェンダ生成
+- AWS Bedrock経由でClaude AIによる構造化アジェンダ生成
 - 自然言語での指示に対応
 - Markdown形式での出力
 
@@ -13,7 +13,7 @@ Backlogの活動データから1on1アジェンダを自動生成するCLIツー
 
 - Node.js 20.0.0以上
 - Backlog APIキー
-- Anthropic APIキー
+- AWS認証情報（Bedrock利用）
 
 ## セットアップ
 
@@ -32,7 +32,7 @@ npm install
 
 ### 3. 環境変数の設定
 
-`.env`ファイルを作成し、APIキーを設定：
+`.env`ファイルを作成し、必要な設定を行います：
 
 ```bash
 cp .env.example .env
@@ -40,15 +40,52 @@ cp .env.example .env
 
 `.env`ファイルを編集して以下を設定：
 
+#### Backlog設定（必須）
+
 ```env
 BACKLOG_DOMAIN=your-space.backlog.com
 BACKLOG_API_KEY=your-backlog-api-key
-ANTHROPIC_API_KEY=your-anthropic-api-key
 ```
 
 - **BACKLOG_DOMAIN**: BacklogのスペースURL（例: `example.backlog.com`）
 - **BACKLOG_API_KEY**: Backlog > 個人設定 > API から取得
-- **ANTHROPIC_API_KEY**: https://console.anthropic.com/ から取得
+
+#### AWS Bedrock設定（必須）
+
+```env
+AWS_REGION=us-east-1
+BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+```
+
+- **AWS_REGION**: 使用するAWSリージョン（デフォルト: `us-east-1`）
+- **BEDROCK_MODEL_ID**: 使用するモデルID（デフォルト: Claude Sonnet 4.5）
+
+#### AWS認証情報の設定
+
+以下のいずれかの方法で設定してください：
+
+1. **環境変数**:
+   ```env
+   AWS_ACCESS_KEY_ID=your-access-key-id
+   AWS_SECRET_ACCESS_KEY=your-secret-access-key
+   AWS_SESSION_TOKEN=your-session-token  # 一時認証情報の場合のみ
+   ```
+
+2. **AWS credentials ファイル** (`~/.aws/credentials`):
+   ```ini
+   [default]
+   aws_access_key_id = your-access-key-id
+   aws_secret_access_key = your-secret-access-key
+   ```
+
+3. **IAM Role**: EC2/ECS/Lambda上で実行する場合は自動取得
+
+#### Slack統合（オプション）
+
+```env
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_USER_TOKEN=xoxp-your-user-token
+```
 
 ### 4. ビルド
 

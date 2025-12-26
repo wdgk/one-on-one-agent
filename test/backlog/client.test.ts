@@ -55,7 +55,7 @@ describe('BacklogClient', () => {
   });
 
   describe('findUserByName', () => {
-    it('ユーザー名が見つかる場合、正しいユーザー情報を返す', async () => {
+    it('ユーザー名が見つかる場合、正しいユーザー情報の配列を返す', async () => {
       // モックデータを設定
       mockCallTool.mockResolvedValue({
         content: [
@@ -70,15 +70,15 @@ describe('BacklogClient', () => {
       });
 
       await client.connect();
-      const user = await client.findUserByName('佐藤');
+      const users = await client.findUserByName('佐藤');
 
-      expect(user).toBeDefined();
-      expect(user.id).toBe('1');
-      expect(user.name).toBe('佐藤太郎');
-      expect(user.mailAddress).toBe('sato@example.com');
+      expect(users).toHaveLength(1);
+      expect(users[0].id).toBe('1');
+      expect(users[0].name).toBe('佐藤太郎');
+      expect(users[0].mailAddress).toBe('sato@example.com');
     });
 
-    it('ユーザー名が見つからない場合、エラーをthrowする', async () => {
+    it('ユーザー名が見つからない場合、空配列を返す', async () => {
       mockCallTool.mockResolvedValue({
         content: [
           {
@@ -91,13 +91,11 @@ describe('BacklogClient', () => {
       });
 
       await client.connect();
-
-      await expect(
-        client.findUserByName('存在しないユーザー')
-      ).rejects.toThrow('ユーザーが見つかりません');
+      const users = await client.findUserByName('存在しないユーザー');
+      expect(users).toEqual([]);
     });
 
-    it('複数ユーザーがマッチする場合、エラーをthrowする', async () => {
+    it('複数ユーザーがマッチする場合、全てのユーザーを返す', async () => {
       mockCallTool.mockResolvedValue({
         content: [
           {
@@ -111,10 +109,11 @@ describe('BacklogClient', () => {
       });
 
       await client.connect();
+      const users = await client.findUserByName('a');
 
-      await expect(
-        client.findUserByName('a')
-      ).rejects.toThrow('複数のユーザーがマッチしました');
+      expect(users).toHaveLength(2);
+      expect(users[0].name).toBe('alice');
+      expect(users[1].name).toBe('alan');
     });
   });
 

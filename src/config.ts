@@ -31,8 +31,16 @@ export interface AppConfig {
     domain: string;
     apiKey: string;
   };
-  anthropic: {
-    apiKey: string;
+  slack: {
+    botToken?: string;
+    userToken?: string;
+  };
+  options?: {
+    maxConcurrency?: number;
+    continueOnError?: boolean;
+    outputDir?: string;
+    dryRun?: boolean;
+    templateDir?: string;
   };
 }
 
@@ -42,7 +50,7 @@ export interface AppConfig {
  * @throws Error 必須環境変数が不足している場合
  */
 export function loadConfig(): AppConfig {
-  return {
+  const config: AppConfig = {
     backlog: {
       domain: getRequiredEnv(
         'BACKLOG_DOMAIN',
@@ -53,13 +61,16 @@ export function loadConfig(): AppConfig {
         'Backlog API キー（個人設定から取得）'
       ),
     },
-    anthropic: {
-      apiKey: getRequiredEnv(
-        'ANTHROPIC_API_KEY',
-        'Anthropic API キー（https://console.anthropic.com/ から取得）'
-      ),
+    slack: {
+      botToken: process.env.SLACK_BOT_TOKEN,
+      userToken: process.env.SLACK_USER_TOKEN,
     },
   };
+
+  // AWS Bedrockの認証情報は環境変数やAWS設定ファイルから自動で読み込まれる
+  // AWS SDKが自動で処理するため、ここでのチェックは不要
+
+  return config;
 }
 
 /**

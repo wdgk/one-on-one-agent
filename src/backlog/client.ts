@@ -56,13 +56,14 @@ export class BacklogClient {
   /**
    * ユーザー名からBacklogユーザーを検索する
    * @param name ユーザー名（部分一致）
-   * @returns マッチしたユーザー情報
-   * @throws ユーザーが見つからない、または複数マッチした場合
+   * @returns マッチしたユーザー情報の配列
    */
-  async findUserByName(name: string): Promise<BacklogUser> {
+  async findUserByName(name: string): Promise<BacklogUser[]> {
     if (!this.client) {
       throw new Error('MCP接続が確立されていません');
     }
+
+    const matchedUsers: BacklogUser[] = [];
 
     // まず認証ユーザー自身の情報を取得して、名前が一致するか確認
     try {
@@ -77,16 +78,16 @@ export class BacklogClient {
         '認証ユーザー情報のパースに失敗しました'
       );
 
-      // 認証ユーザーの名前が検索名に一致する場合、それを返す
+      // 認証ユーザーの名前が検索名に一致する場合、リストに追加
       if (myself.name && myself.name.includes(name)) {
-        return {
+        matchedUsers.push({
           id: String(myself.id),
           name: myself.name,
           mailAddress: myself.mailAddress,
-        };
+        });
       }
     } catch (error) {
-      // get_myselfが失敗した場合は、通常のユーザー検索にフォールバック
+      // get_myselfが失敗した場合は無視して続行
     }
 
     // get_usersツールを呼び出し
@@ -102,27 +103,24 @@ export class BacklogClient {
     );
 
     // 名前で部分一致検索
-    const matchedUsers = users.filter((user) =>
-      user.name && user.name.includes(name)
-    );
+    const foundUsers = users
+      .filter((user) => user.name && user.name.includes(name))
+      .map((user) => ({
+        id: String(user.id),
+        name: user.name,
+        mailAddress: user.mailAddress,
+      }));
 
-    if (matchedUsers.length === 0) {
-      throw new Error(`ユーザーが見つかりません: ${name}`);
+    // 重複を除外してマージ
+    const existingIds = new Set(matchedUsers.map(u => u.id));
+    for (const user of foundUsers) {
+      if (!existingIds.has(user.id)) {
+        matchedUsers.push(user);
+        existingIds.add(user.id);
+      }
     }
 
-    if (matchedUsers.length > 1) {
-      throw new Error(
-        `複数のユーザーがマッチしました: ${matchedUsers.map((u) => u.name).join(', ')}`
-      );
-    }
-
-    const user = matchedUsers[0];
-    // ドメインモデルではIDを文字列として扱う（数値精度の問題を回避するため）
-    return {
-      id: String(user.id),
-      name: user.name,
-      mailAddress: user.mailAddress,
-    };
+    return matchedUsers;
   }
 
   /**
@@ -275,9 +273,9 @@ export class BacklogClient {
           .filter((result) => result.status === 'fulfilled')
           .flatMap((result) => result.value);
       } catch (error) {
-        // プロジェクト単位のエラーは警告を出力して続行
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.warn(`プロジェクト ${projectId} のリポジトリ取得に失敗: ${errorMessage}`);
+        // プロジェクト単位のエラー（Gitが無効など）は無視して続行
+        // const errorMessage = error instanceof Error ? error.message : String(error);
+        // console.debug(`プロジェクト ${projectId} のリポジトリ取得に失敗: ${errorMessage}`);
         return [];
       }
     });
