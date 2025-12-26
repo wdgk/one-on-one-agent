@@ -16,7 +16,22 @@ async function main() {
   try {
     // コマンドライン引数を取得
     const args = process.argv.slice(2);
-    let inputText = args.join(' ');
+
+    // --dry-run フラグをチェック
+    let dryRun = false;
+    const filteredArgs = args.filter(arg => {
+      if (arg === '--dry-run' || arg === '-d') {
+        dryRun = true;
+        return false;
+      }
+      return true;
+    });
+
+    let inputText = filteredArgs.join(' ');
+
+    if (dryRun) {
+      console.log('🧪 ドライランモード: LLMによる生成をスキップします\n');
+    }
 
     // 引数がない場合は対話モード
     if (!inputText) {
@@ -78,10 +93,18 @@ async function main() {
     }
 
     // アジェンダ生成
-    console.log('🤖 アジェンダを生成中...');
-    const result = await agent.generateAgendaWithParams(targetMember, parsed.period);
+    if (dryRun) {
+      console.log('📋 データを取得中...');
+    } else {
+      console.log('🤖 アジェンダを生成中...');
+    }
+    const result = await agent.generateAgendaWithParams(targetMember, parsed.period, { dryRun });
 
-    console.log('✅ アジェンダ生成完了！\n');
+    if (dryRun) {
+      console.log('✅ データ取得完了！\n');
+    } else {
+      console.log('✅ アジェンダ生成完了！\n');
+    }
 
     // メタデータ表示
     console.log('--- 生成情報 ---');
