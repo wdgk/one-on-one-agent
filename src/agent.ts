@@ -4,23 +4,28 @@ import { AgendaGenerator } from './llm/agenda-generator.js';
 import type { AgendaInput, AgendaOutput } from './model/agenda.js';
 import { PERIOD_DEFAULTS, TIME } from './constants.js';
 
+import { SlackClient } from './slack/client.js';
+
 /**
  * 1on1アジェンダ生成エージェント
  * 全体のオーケストレーションを担当
  */
 export class OneOnOneAgendaAgent {
   private backlogClient: BacklogClient;
+  private slackClient: SlackClient;
   private parameterParser: ParameterParser;
   private agendaGenerator: AgendaGenerator;
 
   constructor(
     backlogClient?: BacklogClient,
     parameterParser?: ParameterParser,
-    agendaGenerator?: AgendaGenerator
+    agendaGenerator?: AgendaGenerator,
+    slackClient?: SlackClient
   ) {
     this.backlogClient = backlogClient || new BacklogClient();
     this.parameterParser = parameterParser || new ParameterParser();
     this.agendaGenerator = agendaGenerator || new AgendaGenerator();
+    this.slackClient = slackClient || new SlackClient();
   }
 
   /**
@@ -28,7 +33,7 @@ export class OneOnOneAgendaAgent {
    * @param inputText ユーザーの入力テキスト
    * @returns 生成されたアジェンダ
    */
-  async generateAgenda(inputText: string): Promise<AgendaOutput> {
+  async generateAgenda(inputText: string, options?: { dryRun?: boolean; templateDir?: string }): Promise<AgendaOutput> {
     // 1. パラメータ抽出
     const parsed = await this.parseInput(inputText);
 
@@ -49,7 +54,7 @@ export class OneOnOneAgendaAgent {
     }
 
     // 4. アジェンダ生成
-    return this.generateAgendaWithParams(members[0], parsed.period);
+    return this.generateAgendaWithParams(members[0], parsed.period, options);
   }
 
   /**
@@ -73,8 +78,9 @@ export class OneOnOneAgendaAgent {
    * パラメータを指定してアジェンダを生成する
    */
   async generateAgendaWithParams(
-    member: { id: string; name: string },
-    periodParams: { weeks?: number; months?: number; days?: number }
+    member: { id: string; name: string; mailAddress?: string },
+    periodParams: { weeks?: number; months?: number; days?: number },
+    options?: { dryRun?: boolean; templateDir?: string }
   ): Promise<AgendaOutput> {
     // 期間計算
     const period = this.calculatePeriod(periodParams);
@@ -99,6 +105,19 @@ export class OneOnOneAgendaAgent {
       period.end
     );
 
+    // Slackメッセージ取得
+    let slackMessages: any[] = [];
+    if (this.slackClient.isAvailable() && member.mailAddress) {
+      const slackUserId = await this.slackClient.findUserByEmail(member.mailAddress);
+      if (slackUserId) {
+        slackMessages = await this.slackClient.getMessagesInPeriod(
+          slackUserId,
+          period.start,
+          period.end
+        );
+      }
+    }
+
     // AgendaInput構築
     const agendaInput: AgendaInput = {
       member: {
@@ -113,10 +132,26 @@ export class OneOnOneAgendaAgent {
         issues,
         pullRequests,
       },
+      slack: {
+        messages: slackMessages,
+      },
     };
 
-    // アジェンダ生成
-    const markdown = await this.agendaGenerator.generate(agendaInput);
+    let markdown: string;
+
+    if (options?.dryRun) {
+      markdown = this.generateDryRunOutput(agendaInput);
+    } else {
+      // アジェンダ生成
+      // テンプレートディレクトリが指定されている場合は、そのためのGeneratorを使用するか、
+      // 既存のGeneratorに一時的にパスを渡す必要がある。
+      // ここでは、options.templateDirがある場合、新しいGeneratorを作成する（コストは低い）
+      const generator = options?.templateDir
+        ? new AgendaGenerator(options.templateDir)
+        : this.agendaGenerator;
+
+      markdown = await generator.generate(agendaInput);
+    }
 
     // AgendaOutput作成
     return {
@@ -130,6 +165,45 @@ export class OneOnOneAgendaAgent {
         issueCount: issues.length,
       },
     };
+  }
+
+  /**
+   * ドライラン用の出力を生成する
+   */
+  private generateDryRunOutput(input: AgendaInput): string {
+    let output = `# [Dry Run] Data Preview: ${input.member.name}\n\n`;
+    output += `**Period**: ${input.period.start} - ${input.period.end}\n\n`;
+
+    output += `## Issues (${input.backlog.issues.length})\n`;
+    if (input.backlog.issues.length === 0) {
+      output += `- No issues found.\n`;
+    } else {
+      for (const issue of input.backlog.issues) {
+        output += `- [${issue.status}] ${issue.key}: ${issue.title} (${issue.url})\n`;
+      }
+    }
+    output += `\n`;
+
+    output += `## Pull Requests (${input.backlog.pullRequests.length})\n`;
+    if (input.backlog.pullRequests.length === 0) {
+      output += `- No pull requests found.\n`;
+    } else {
+      for (const pr of input.backlog.pullRequests) {
+        output += `- [${pr.status}] ${pr.repositoryName} #${pr.number}: ${pr.title} (${pr.url})\n`;
+      }
+    }
+    output += `\n`;
+
+    if (input.slack && input.slack.messages.length > 0) {
+      output += `## Slack Messages (${input.slack.messages.length})\n`;
+      for (const msg of input.slack.messages) {
+        const date = new Date(parseFloat(msg.ts) * 1000).toLocaleString('ja-JP');
+        output += `- [${date}] #${msg.channel}: ${msg.text.substring(0, 50).replace(/\n/g, ' ')}...\n`;
+      }
+      output += `\n`;
+    }
+
+    return output;
   }
 
   /**

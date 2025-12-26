@@ -16,23 +16,29 @@ vi.mock('../src/config.js', () => ({
       apiKey: 'test-gemini-key',
     },
     llmProvider: 'claude',
+    slack: {
+      userToken: 'test-slack-token',
+    },
   }),
 }));
 
 import { BacklogClient } from '../src/backlog/client.js';
 import { ParameterParser } from '../src/llm/parameter-parser.js';
 import { AgendaGenerator } from '../src/llm/agenda-generator.js';
+import { SlackClient } from '../src/slack/client.js';
 
 // 依存クラスのモック化
 vi.mock('../src/backlog/client.js');
 vi.mock('../src/llm/parameter-parser.js');
 vi.mock('../src/llm/agenda-generator.js');
+vi.mock('../src/slack/client.js');
 
 describe('OneOnOneAgendaAgent', () => {
   let agent: OneOnOneAgendaAgent;
   let mockBacklogClient: any;
   let mockParameterParser: any;
   let mockAgendaGenerator: any;
+  let mockSlackClient: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -41,6 +47,7 @@ describe('OneOnOneAgendaAgent', () => {
     mockBacklogClient = new BacklogClient();
     mockParameterParser = new ParameterParser();
     mockAgendaGenerator = new AgendaGenerator();
+    mockSlackClient = new SlackClient();
 
     // メソッドのモック化
     mockBacklogClient.connect = vi.fn();
@@ -53,10 +60,15 @@ describe('OneOnOneAgendaAgent', () => {
 
     mockAgendaGenerator.generate = vi.fn();
 
+    mockSlackClient.isAvailable = vi.fn().mockReturnValue(true);
+    mockSlackClient.findUserByEmail = vi.fn();
+    mockSlackClient.getMessagesInPeriod = vi.fn().mockResolvedValue([]);
+
     agent = new OneOnOneAgendaAgent(
       mockBacklogClient,
       mockParameterParser,
-      mockAgendaGenerator
+      mockAgendaGenerator,
+      mockSlackClient
     );
   });
 
@@ -319,6 +331,89 @@ describe('OneOnOneAgendaAgent', () => {
       const result = await agent.generateAgenda(input);
 
       expect(result.metadata.issueCount).toBe(3);
+    });
+
+    it('ドライランモード: LLMを呼び出さずにプレビューを生成する', async () => {
+      const member = {
+        id: '1',
+        name: '佐藤太郎',
+        mailAddress: 'sato@example.com',
+      };
+      const periodParams = { weeks: 2 };
+
+      // BacklogClient の getIssuesByAssignee のモック
+      mockBacklogClient.getIssuesByAssignee.mockResolvedValue([
+        {
+          id: '101',
+          key: 'TEST-1',
+          title: 'テスト課題',
+          type: 'タスク',
+          status: '完了',
+          project: '1',
+          url: 'https://test.backlog.com/view/TEST-1',
+          updatedAt: '2024-11-10T10:00:00Z',
+          createdAt: '2024-11-01T10:00:00Z',
+          priority: '中',
+        },
+      ]);
+
+      // BacklogClient の getPullRequestsByCreator のモック
+      mockBacklogClient.getPullRequestsByCreator.mockResolvedValue([]);
+
+      // generateAgendaWithParams を dryRun: true で呼び出し
+      const result = await agent.generateAgendaWithParams(member, periodParams, { dryRun: true });
+
+      // AgendaGenerator.generate が呼ばれていないことを確認
+      expect(mockAgendaGenerator.generate).not.toHaveBeenCalled();
+
+      // 出力内容の検証
+      expect(result.markdown).toContain('# [Dry Run] Data Preview');
+      expect(result.markdown).toContain('TEST-1: テスト課題');
+      expect(result.metadata.issueCount).toBe(1);
+    });
+
+    it('Slack連携: メッセージが取得されアジェンダ入力に含まれる', async () => {
+      const member = {
+        id: '1',
+        name: '佐藤太郎',
+        mailAddress: 'sato@example.com',
+      };
+      const periodParams = { weeks: 2 };
+
+      // Backlog mocks
+      mockBacklogClient.getIssuesByAssignee.mockResolvedValue([]);
+      mockBacklogClient.getPullRequestsByCreator.mockResolvedValue([]);
+
+      // Slack mocks
+      mockSlackClient.isAvailable.mockReturnValue(true);
+      mockSlackClient.findUserByEmail.mockResolvedValue('U12345');
+      mockSlackClient.getMessagesInPeriod.mockResolvedValue([
+        {
+          id: 'msg1',
+          text: 'Slack Msg',
+          user: 'U12345',
+          channel: 'general',
+          ts: '1234567890.000000',
+          type: 'message',
+        },
+      ]);
+
+      // generateAgendaWithParams を呼び出し
+      await agent.generateAgendaWithParams(member, periodParams);
+
+      // SlackClientのメソッドが呼ばれたか確認
+      expect(mockSlackClient.findUserByEmail).toHaveBeenCalledWith('sato@example.com');
+      expect(mockSlackClient.getMessagesInPeriod).toHaveBeenCalledWith(
+        'U12345',
+        expect.any(Date),
+        expect.any(Date)
+      );
+
+      // AgendaGenerator.generate の引数に slack データが含まれているか確認
+      const callArgs = mockAgendaGenerator.generate.mock.calls[0][0];
+      expect(callArgs.slack).toBeDefined();
+      expect(callArgs.slack.messages).toHaveLength(1);
+      expect(callArgs.slack.messages[0].text).toBe('Slack Msg');
     });
   });
 

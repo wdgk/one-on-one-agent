@@ -31,13 +31,17 @@ export interface AppConfig {
     domain: string;
     apiKey: string;
   };
-  anthropic: {
-    apiKey: string;
+  slack: {
+    botToken?: string;
+    userToken?: string;
   };
-  gemini: {
-    apiKey?: string;
+  options?: {
+    maxConcurrency?: number;
+    continueOnError?: boolean;
+    outputDir?: string;
+    dryRun?: boolean;
+    templateDir?: string;
   };
-  llmProvider: 'claude' | 'gemini';
 }
 
 /**
@@ -46,8 +50,6 @@ export interface AppConfig {
  * @throws Error 必須環境変数が不足している場合
  */
 export function loadConfig(): AppConfig {
-  const llmProvider = (process.env.LLM_PROVIDER === 'gemini' ? 'gemini' : 'claude');
-
   const config: AppConfig = {
     backlog: {
       domain: getRequiredEnv(
@@ -59,22 +61,14 @@ export function loadConfig(): AppConfig {
         'Backlog API キー（個人設定から取得）'
       ),
     },
-    anthropic: {
-      apiKey: process.env.ANTHROPIC_API_KEY || '',
+    slack: {
+      botToken: process.env.SLACK_BOT_TOKEN,
+      userToken: process.env.SLACK_USER_TOKEN,
     },
-    gemini: {
-      apiKey: process.env.GEMINI_API_KEY,
-    },
-    llmProvider,
   };
 
-  // プロバイダーに応じた必須チェック
-  if (llmProvider === 'claude' && !config.anthropic.apiKey) {
-    getRequiredEnv('ANTHROPIC_API_KEY', 'Anthropic API キー');
-  }
-  if (llmProvider === 'gemini' && !config.gemini.apiKey) {
-    getRequiredEnv('GEMINI_API_KEY', 'Gemini API キー');
-  }
+  // AWS Bedrockの認証情報は環境変数やAWS設定ファイルから自動で読み込まれる
+  // AWS SDKが自動で処理するため、ここでのチェックは不要
 
   return config;
 }
