@@ -113,25 +113,35 @@ async function main() {
     console.log(`課題数: ${result.metadata.issueCount}件`);
     console.log(`生成日時: ${new Date(result.metadata.generatedAt).toLocaleString('ja-JP')}\n`);
 
-    // ファイル保存
-    const outputDir = join(process.cwd(), 'output');
-    await mkdir(outputDir, { recursive: true });
+    if (dryRun) {
+      // ドライランモード: ファイル保存せずにプレビューのみ表示
+      console.log('--- データプレビュー ---');
+      console.log(result.markdown.substring(0, 500));
+      if (result.markdown.length > 500) {
+        console.log('\n...(以下省略)');
+      }
+      console.log('\n💡 ドライランモードのため、ファイルは保存されませんでした。');
+    } else {
+      // 通常モード: ファイル保存
+      const outputDir = join(process.cwd(), 'output');
+      await mkdir(outputDir, { recursive: true });
 
-    const fileName = generateAgendaFilename(
-      result.metadata.memberName,
-      result.metadata.periodEnd
-    ) + '.md';
+      const fileName = generateAgendaFilename(
+        result.metadata.memberName,
+        result.metadata.periodEnd
+      ) + '.md';
 
-    const filePath = join(outputDir, fileName);
-    await writeFile(filePath, result.markdown, 'utf-8');
+      const filePath = join(outputDir, fileName);
+      await writeFile(filePath, result.markdown, 'utf-8');
 
-    console.log('💾 ファイル保存完了！');
-    console.log(`保存先: ${filePath}\n`);
+      console.log('💾 ファイル保存完了！');
+      console.log(`保存先: ${filePath}\n`);
 
-    console.log('--- プレビュー ---');
-    console.log(result.markdown.substring(0, 500));
-    if (result.markdown.length > 500) {
-      console.log('\n...(続きはファイルをご確認ください)');
+      console.log('--- プレビュー ---');
+      console.log(result.markdown.substring(0, 500));
+      if (result.markdown.length > 500) {
+        console.log('\n...(続きはファイルをご確認ください)');
+      }
     }
   } catch (error) {
     console.error('\n❌ エラーが発生しました:');
