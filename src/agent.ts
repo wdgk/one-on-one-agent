@@ -143,14 +143,8 @@ export class OneOnOneAgendaAgent {
       markdown = this.generateDryRunOutput(agendaInput);
     } else {
       // アジェンダ生成
-      // テンプレートディレクトリが指定されている場合は、そのためのGeneratorを使用するか、
-      // 既存のGeneratorに一時的にパスを渡す必要がある。
-      // ここでは、options.templateDirがある場合、新しいGeneratorを作成する（コストは低い）
-      const generator = options?.templateDir
-        ? new AgendaGenerator(options.templateDir)
-        : this.agendaGenerator;
-
-      markdown = await generator.generate(agendaInput);
+      // TODO: テンプレートディレクトリが指定されている場合の対応はfeature/9-externalize-agenda-templateで実装予定
+      markdown = await this.agendaGenerator.generate(agendaInput);
     }
 
     // AgendaOutput作成

@@ -54,11 +54,11 @@ BACKLOG_API_KEY=your-backlog-api-key
 
 ```env
 AWS_REGION=us-east-1
-BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0
+BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
 ```
 
 - **AWS_REGION**: 使用するAWSリージョン（デフォルト: `us-east-1`）
-- **BEDROCK_MODEL_ID**: 使用するモデルID（デフォルト: Claude 3.5 Sonnet v2）
+- **BEDROCK_MODEL_ID**: 使用するモデルID（デフォルト: Claude Sonnet 4.5）
 
 #### AWS認証情報の設定
 

@@ -17,8 +17,8 @@ export class BedrockClient implements LLMClient {
       region: process.env.AWS_REGION || 'us-east-1',
     });
 
-    // デフォルトはClaude 3.5 Sonnet
-    this.modelId = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0';
+    // デフォルトはClaude Sonnet 4.5
+    this.modelId = process.env.BEDROCK_MODEL_ID || 'us.anthropic.claude-sonnet-4-5-20250929-v1:0';
   }
 
   /**
