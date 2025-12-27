@@ -35,6 +35,10 @@ export interface AppConfig {
     botToken?: string;
     userToken?: string;
   };
+  calendar: {
+    credentialsPath?: string;
+    tokenPath?: string;
+  };
   options?: {
     maxConcurrency?: number;
     continueOnError?: boolean;
@@ -64,6 +68,10 @@ export function loadConfig(): AppConfig {
     slack: {
       botToken: process.env.SLACK_BOT_TOKEN,
       userToken: process.env.SLACK_USER_TOKEN,
+    },
+    calendar: {
+      credentialsPath: process.env.GOOGLE_CALENDAR_CREDENTIALS_PATH,
+      tokenPath: process.env.GOOGLE_CALENDAR_TOKEN_PATH,
     },
   };
 
