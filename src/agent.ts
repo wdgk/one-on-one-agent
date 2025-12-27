@@ -5,6 +5,9 @@ import type { AgendaInput, AgendaOutput } from './model/agenda.js';
 import { PERIOD_DEFAULTS, TIME } from './constants.js';
 
 import { SlackClient } from './slack/client.js';
+import type { SlackMessage } from './model/slack.js';
+import { CalendarClient } from './calendar/client.js';
+import type { CalendarEvent, MeetingStats } from './model/calendar.js';
 
 /**
  * 1on1アジェンダ生成エージェント
@@ -13,6 +16,7 @@ import { SlackClient } from './slack/client.js';
 export class OneOnOneAgendaAgent {
   private backlogClient: BacklogClient;
   private slackClient: SlackClient;
+  private calendarClient: CalendarClient;
   private parameterParser: ParameterParser;
   private agendaGenerator: AgendaGenerator;
 
@@ -20,12 +24,14 @@ export class OneOnOneAgendaAgent {
     backlogClient?: BacklogClient,
     parameterParser?: ParameterParser,
     agendaGenerator?: AgendaGenerator,
-    slackClient?: SlackClient
+    slackClient?: SlackClient,
+    calendarClient?: CalendarClient
   ) {
     this.backlogClient = backlogClient || new BacklogClient();
     this.parameterParser = parameterParser || new ParameterParser();
     this.agendaGenerator = agendaGenerator || new AgendaGenerator();
     this.slackClient = slackClient || new SlackClient();
+    this.calendarClient = calendarClient || new CalendarClient();
   }
 
   /**
@@ -106,15 +112,37 @@ export class OneOnOneAgendaAgent {
     );
 
     // Slackメッセージ取得
-    let slackMessages: any[] = [];
+    let slackMessages: SlackMessage[] = [];
     if (this.slackClient.isAvailable() && member.mailAddress) {
-      const slackUserId = await this.slackClient.findUserByEmail(member.mailAddress);
-      if (slackUserId) {
-        slackMessages = await this.slackClient.getMessagesInPeriod(
-          slackUserId,
+      try {
+        await this.slackClient.connect();
+        const slackUser = await this.slackClient.findUserByEmail(member.mailAddress);
+        if (slackUser) {
+          slackMessages = await this.slackClient.getMessagesInPeriod(
+            slackUser.id,
+            period.start,
+            period.end
+          );
+        }
+      } catch (error) {
+        console.warn(`Slackデータ取得に失敗: ${error}`);
+      }
+    }
+
+    // Calendarイベント取得
+    let calendarEvents: CalendarEvent[] = [];
+    let calendarStats: MeetingStats | undefined;
+    if (this.calendarClient.isAvailable() && member.mailAddress) {
+      try {
+        await this.calendarClient.connect();
+        calendarEvents = await this.calendarClient.getEventsInPeriod(
+          member.mailAddress,
           period.start,
           period.end
         );
+        calendarStats = await this.calendarClient.getMeetingStats(calendarEvents);
+      } catch (error) {
+        console.warn(`Calendarデータ取得に失敗: ${error}`);
       }
     }
 
@@ -132,9 +160,13 @@ export class OneOnOneAgendaAgent {
         issues,
         pullRequests,
       },
-      slack: {
+      slack: slackMessages.length > 0 ? {
         messages: slackMessages,
-      },
+      } : undefined,
+      calendar: calendarEvents.length > 0 && calendarStats ? {
+        events: calendarEvents,
+        stats: calendarStats,
+      } : undefined,
     };
 
     let markdown: string;
@@ -197,6 +229,33 @@ export class OneOnOneAgendaAgent {
       output += `\n`;
     }
 
+    if (input.calendar) {
+      output += `## Calendar Events (${input.calendar.events.length})\n`;
+      if (input.calendar.events.length === 0) {
+        output += `- No events found.\n`;
+      } else {
+        for (const event of input.calendar.events) {
+          const startDate = new Date(event.start).toLocaleString('ja-JP');
+          output += `- [${startDate}] [${event.eventType}] ${event.summary} (${event.durationMinutes}分)\n`;
+        }
+      }
+      output += `\n`;
+
+      if (input.calendar.stats) {
+        output += `## Meeting Statistics\n`;
+        output += `- Total Events: ${input.calendar.stats.totalEvents}\n`;
+        output += `- Total Meeting Time: ${input.calendar.stats.totalMeetingMinutes}分\n`;
+        output += `- Meeting Count: ${input.calendar.stats.meetingCount}\n`;
+        output += `- 1on1 Count: ${input.calendar.stats.oneOnOneCount}\n`;
+        output += `- Focus Time: ${input.calendar.stats.focusTimeMinutes}分\n`;
+        output += `- Average Meeting Duration: ${input.calendar.stats.averageMeetingDuration}分\n`;
+        if (input.calendar.stats.busiestDay) {
+          output += `- Busiest Day: ${input.calendar.stats.busiestDay}\n`;
+        }
+        output += `\n`;
+      }
+    }
+
     return output;
   }
 
@@ -205,6 +264,8 @@ export class OneOnOneAgendaAgent {
    */
   async cleanup(): Promise<void> {
     await this.backlogClient.disconnect();
+    await this.slackClient.disconnect();
+    await this.calendarClient.disconnect();
   }
 
   /**

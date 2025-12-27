@@ -1,4 +1,5 @@
 import type { IssueSummary, PullRequestSummary } from './backlog.js';
+import type { CalendarEvent, MeetingStats } from './calendar.js';
 
 /**
  * アジェンダ生成のための入力データ
@@ -37,6 +38,13 @@ export type AgendaInput = {
       permalink?: string;
       type: string;
     }>;
+  };
+  /** Calendar情報 */
+  calendar?: {
+    /** イベント一覧 */
+    events: CalendarEvent[];
+    /** 会議統計 */
+    stats: MeetingStats;
   };
 };
 

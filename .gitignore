@@ -9,6 +9,10 @@ dist/
 .env.local
 .env.*.local
 
+# Google Calendar OAuth2 tokens
+token.json
+credentials.json
+
 # Test coverage
 coverage/
 

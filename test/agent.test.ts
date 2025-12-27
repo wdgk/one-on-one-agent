@@ -386,7 +386,12 @@ describe('OneOnOneAgendaAgent', () => {
 
       // Slack mocks
       mockSlackClient.isAvailable.mockReturnValue(true);
-      mockSlackClient.findUserByEmail.mockResolvedValue('U12345');
+      mockSlackClient.findUserByEmail.mockResolvedValue({
+        id: 'U12345',
+        name: 'Taro Sato',
+        realName: '佐藤太郎',
+        email: 'sato@example.com',
+      });
       mockSlackClient.getMessagesInPeriod.mockResolvedValue([
         {
           id: 'msg1',
