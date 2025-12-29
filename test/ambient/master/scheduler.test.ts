@@ -89,7 +89,7 @@ describe('Scheduler', () => {
       expect(jobs[0].status).toBe('PENDING');
     });
 
-    it('参加者が2人のイベントからJobを作成できること', async () => {
+    it('タイトルに"1on1"を含まない2人のイベントは除外されること（デフォルト動作）', async () => {
       const mockEvents: CalendarEvent[] = [
         {
           id: 'event1',
@@ -108,6 +108,41 @@ describe('Scheduler', () => {
       vi.mocked(mockCalendarClient.getEventsInPeriod).mockResolvedValue(mockEvents);
 
       const jobs = await scheduler.scheduleJobs('manager@example.com');
+
+      // デフォルト（matchAll2PersonMeetings=false）では、タイトルに"1on1"を含まないため除外される
+      expect(jobs).toHaveLength(0);
+    });
+
+    it('参加者が2人のイベントからJobを作成できること（matchAll2PersonMeetings=trueの場合）', async () => {
+      // matchAll2PersonMeetings: true を明示的に設定したSchedulerを作成
+      const schedulerWithAllMeetings = new Scheduler(
+        mockCalendarClient,
+        jobRepository,
+        {
+          lookaheadHours: 48,
+          internalDomain: 'example.com',
+          matchAll2PersonMeetings: true,
+        }
+      );
+
+      const mockEvents: CalendarEvent[] = [
+        {
+          id: 'event1',
+          summary: '定例ミーティング',
+          start: '2025-01-15T10:00:00Z',
+          end: '2025-01-15T11:00:00Z',
+          durationMinutes: 60,
+          attendees: [
+            { email: 'manager@example.com', displayName: 'マネージャー' },
+            { email: 'member@example.com', displayName: 'テストメンバー' },
+          ],
+          eventType: 'meeting',
+        },
+      ];
+
+      vi.mocked(mockCalendarClient.getEventsInPeriod).mockResolvedValue(mockEvents);
+
+      const jobs = await schedulerWithAllMeetings.scheduleJobs('manager@example.com');
 
       expect(jobs).toHaveLength(1);
       expect(jobs[0].eventId).toBe('event1');

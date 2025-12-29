@@ -23,9 +23,9 @@ export interface SchedulerConfig {
 
   /**
    * 2人のミーティングをすべて1on1として扱うか
-   * true: タイトルに関係なく2人のミーティングをすべて1on1とみなす
-   * false: タイトルパターンにマッチするミーティングのみを1on1とみなす
-   * デフォルト: true
+   * true: タイトルに関係なく2人のミーティングをすべて1on1とみなす（ノイズが増える可能性）
+   * false: タイトルパターンにマッチするミーティングのみを1on1とみなす（推奨）
+   * デフォルト: false
    */
   matchAll2PersonMeetings?: boolean;
 }

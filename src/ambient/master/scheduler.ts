@@ -20,7 +20,7 @@ export class Scheduler {
       lookaheadHours: config.lookaheadHours,
       internalDomain: config.internalDomain,
       oneOnOneTitlePattern: config.oneOnOneTitlePattern || /1\s*on\s*1|1\s*:?\s*1|one\s*on\s*one/i,
-      matchAll2PersonMeetings: config.matchAll2PersonMeetings !== undefined ? config.matchAll2PersonMeetings : true,
+      matchAll2PersonMeetings: config.matchAll2PersonMeetings !== undefined ? config.matchAll2PersonMeetings : false,
     };
   }
 
