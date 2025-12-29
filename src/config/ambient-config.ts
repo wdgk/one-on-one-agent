@@ -104,7 +104,7 @@ export function loadAmbientConfig(): AmbientConfig {
     policy: {
       confidenceThreshold: 0.7,
       evidenceRatioThreshold: 0.8,
-      autoDispatch: false, // Phase AではfalseでプレビューのみH
+      autoDispatch: false, // Phase Aではfalseでプレビューのみ
     },
   };
 }

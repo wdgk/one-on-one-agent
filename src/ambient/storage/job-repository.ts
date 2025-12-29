@@ -1,11 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseConnection } from './database.js';
-import type { Job, JobStatus, Repository } from './types.js';
+import type { Job, JobStatus } from './types.js';
 
 /**
  * Job（1on1単位のジョブ）のRepository
  */
-export class JobRepository implements Partial<Repository<Job>> {
+export class JobRepository {
   constructor(private db: DatabaseConnection) {}
 
   /**

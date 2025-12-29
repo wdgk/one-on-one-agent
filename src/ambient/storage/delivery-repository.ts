@@ -1,11 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseConnection } from './database.js';
-import type { Delivery, DeliveryStatus, DeliveryChannel, Repository } from './types.js';
+import type { Delivery, DeliveryStatus, DeliveryChannel } from './types.js';
 
 /**
  * Delivery（送信/作成ログ）のRepository
  */
-export class DeliveryRepository implements Partial<Repository<Delivery>> {
+export class DeliveryRepository {
   constructor(private db: DatabaseConnection) {}
 
   /**
