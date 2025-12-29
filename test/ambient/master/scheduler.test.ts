@@ -59,10 +59,11 @@ describe('Scheduler', () => {
           end: '2025-01-15T11:00:00Z',
           durationMinutes: 60,
           attendees: [
-            { email: 'manager@example.com', displayName: 'マネージャー' },
-            { email: 'member@example.com', displayName: 'テストメンバー' },
+            { email: 'manager@example.com', displayName: 'マネージャー', responseStatus: 'accepted' },
+            { email: 'member@example.com', displayName: 'テストメンバー', responseStatus: 'accepted' },
           ],
-          eventType: '1on1',
+          status: 'confirmed',
+          eventType: 'one-on-one',
         },
         {
           id: 'event2',
@@ -71,10 +72,11 @@ describe('Scheduler', () => {
           end: '2025-01-15T15:00:00Z',
           durationMinutes: 60,
           attendees: [
-            { email: 'manager@example.com', displayName: 'マネージャー' },
-            { email: 'member1@example.com', displayName: 'メンバー1' },
-            { email: 'member2@example.com', displayName: 'メンバー2' },
+            { email: 'manager@example.com', displayName: 'マネージャー', responseStatus: 'accepted' },
+            { email: 'member1@example.com', displayName: 'メンバー1', responseStatus: 'accepted' },
+            { email: 'member2@example.com', displayName: 'メンバー2', responseStatus: 'accepted' },
           ],
+          status: 'confirmed',
           eventType: 'meeting',
         },
       ];
@@ -98,9 +100,10 @@ describe('Scheduler', () => {
           end: '2025-01-15T11:00:00Z',
           durationMinutes: 60,
           attendees: [
-            { email: 'manager@example.com', displayName: 'マネージャー' },
-            { email: 'member@example.com', displayName: 'テストメンバー' },
+            { email: 'manager@example.com', displayName: 'マネージャー', responseStatus: 'accepted' },
+            { email: 'member@example.com', displayName: 'テストメンバー', responseStatus: 'accepted' },
           ],
+          status: 'confirmed',
           eventType: 'meeting',
         },
       ];
@@ -133,9 +136,10 @@ describe('Scheduler', () => {
           end: '2025-01-15T11:00:00Z',
           durationMinutes: 60,
           attendees: [
-            { email: 'manager@example.com', displayName: 'マネージャー' },
-            { email: 'member@example.com', displayName: 'テストメンバー' },
+            { email: 'manager@example.com', displayName: 'マネージャー', responseStatus: 'accepted' },
+            { email: 'member@example.com', displayName: 'テストメンバー', responseStatus: 'accepted' },
           ],
+          status: 'confirmed',
           eventType: 'meeting',
         },
       ];
@@ -158,10 +162,11 @@ describe('Scheduler', () => {
           end: '2025-01-15T11:00:00Z',
           durationMinutes: 60,
           attendees: [
-            { email: 'manager@example.com', displayName: 'マネージャー' },
-            { email: 'partner@external.com', displayName: '外部パートナー' },
+            { email: 'manager@example.com', displayName: 'マネージャー', responseStatus: 'accepted' },
+            { email: 'partner@external.com', displayName: '外部パートナー', responseStatus: 'accepted' },
           ],
-          eventType: '1on1',
+          status: 'confirmed',
+          eventType: 'one-on-one',
         },
       ];
 
@@ -181,10 +186,11 @@ describe('Scheduler', () => {
           end: '2025-01-15T11:00:00Z',
           durationMinutes: 60,
           attendees: [
-            { email: 'manager@example.com', displayName: 'マネージャー' },
-            { email: 'member1@example.com', displayName: 'メンバー1' },
-            { email: 'member2@example.com', displayName: 'メンバー2' },
+            { email: 'manager@example.com', displayName: 'マネージャー', responseStatus: 'accepted' },
+            { email: 'member1@example.com', displayName: 'メンバー1', responseStatus: 'accepted' },
+            { email: 'member2@example.com', displayName: 'メンバー2', responseStatus: 'accepted' },
           ],
+          status: 'confirmed',
           eventType: 'meeting',
         },
       ];
@@ -205,10 +211,11 @@ describe('Scheduler', () => {
           end: '2025-01-15T11:00:00Z',
           durationMinutes: 60,
           attendees: [
-            { email: 'manager@example.com', displayName: 'マネージャー' },
-            { email: 'member@example.com', displayName: 'テストメンバー' },
+            { email: 'manager@example.com', displayName: 'マネージャー', responseStatus: 'accepted' },
+            { email: 'member@example.com', displayName: 'テストメンバー', responseStatus: 'accepted' },
           ],
-          eventType: '1on1',
+          status: 'confirmed',
+          eventType: 'one-on-one',
         },
       ];
 

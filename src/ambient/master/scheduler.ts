@@ -52,9 +52,10 @@ export class Scheduler {
         continue;
       }
 
+      // メールアドレスを正規化してから保存（冪等キーも正規化される）
       const job = await this.jobRepository.upsert({
         eventId: event.id,
-        attendeeEmail: attendee.email,
+        attendeeEmail: this.normalizeEmail(attendee.email),
         attendeeName: attendee.displayName || null,
         startAt: event.start,
         endAt: event.end,
