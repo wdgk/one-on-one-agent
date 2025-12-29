@@ -14,6 +14,10 @@ Backlogの活動データから1on1アジェンダを自動生成するCLIツー
 - Node.js 20.0.0以上
 - Backlog APIキー
 - AWS認証情報（Bedrock利用）
+- C/C++コンパイラ（`better-sqlite3`のネイティブビルドに必要）
+  - macOS: Xcode Command Line Tools (`xcode-select --install`)
+  - Ubuntu/Debian: `build-essential`
+  - Windows: Visual Studio Build Tools
 
 ## セットアップ
 
@@ -29,6 +33,8 @@ cd one-on-one-agent
 ```bash
 npm install
 ```
+
+**注意**: `better-sqlite3`はネイティブモジュールのため、初回インストール時にC/C++コンパイラによるビルドが実行されます。環境によってはビルドに数分かかる場合があります。
 
 ### 3. 環境変数の設定
 
