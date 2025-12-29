@@ -47,7 +47,7 @@ export class DeliveryRepository {
         idempotencyKey
       );
 
-    return this.findById(id) as Promise<Delivery>;
+    return this.findByIdOrThrow(id);
   }
 
   /**
@@ -72,6 +72,20 @@ export class DeliveryRepository {
       .get(id) as Delivery | undefined;
 
     return delivery || null;
+  }
+
+  /**
+   * IDでDeliveryを検索する（存在しない場合はエラー）
+   * @param id DeliveryのID
+   * @returns Delivery
+   * @throws Error Deliveryが存在しない場合
+   */
+  private async findByIdOrThrow(id: string): Promise<Delivery> {
+    const delivery = await this.findById(id);
+    if (!delivery) {
+      throw new Error(`Delivery not found: ${id}`);
+    }
+    return delivery;
   }
 
   /**
@@ -128,7 +142,7 @@ export class DeliveryRepository {
       )
       .run(status, externalId || null, sentAt, errorMessage || null, id);
 
-    return this.findById(id) as Promise<Delivery>;
+    return this.findByIdOrThrow(id);
   }
 
   /**
@@ -200,7 +214,7 @@ export class DeliveryRepository {
         .run(...values);
     }
 
-    return this.findById(id) as Promise<Delivery>;
+    return this.findByIdOrThrow(id);
   }
 
   /**

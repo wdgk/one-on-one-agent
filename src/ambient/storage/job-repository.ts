@@ -55,7 +55,7 @@ export class JobRepository {
         )
         .run(data.attendeeName, data.endAt, now, existingJob.id);
 
-      return this.findById(existingJob.id) as Promise<Job>;
+      return this.findByIdOrThrow(existingJob.id);
     }
 
     // 新しいJobを作成
@@ -85,7 +85,7 @@ export class JobRepository {
         idempotencyKey
       );
 
-    return this.findById(id) as Promise<Job>;
+    return this.findByIdOrThrow(id);
   }
 
   /**
@@ -114,6 +114,20 @@ export class JobRepository {
   }
 
   /**
+   * IDでJobを検索する（存在しない場合はエラー）
+   * @param id JobのID
+   * @returns Job
+   * @throws Error Jobが存在しない場合
+   */
+  private async findByIdOrThrow(id: string): Promise<Job> {
+    const job = await this.findById(id);
+    if (!job) {
+      throw new Error(`Job not found: ${id}`);
+    }
+    return job;
+  }
+
+  /**
    * Jobのステータスを更新する
    * @param id JobのID
    * @param status 新しいステータス
@@ -138,7 +152,7 @@ export class JobRepository {
       )
       .run(status, now, errorMessage || null, id);
 
-    return this.findById(id) as Promise<Job>;
+    return this.findByIdOrThrow(id);
   }
 
   /**
@@ -240,7 +254,7 @@ export class JobRepository {
         .run(...values);
     }
 
-    return this.findById(id) as Promise<Job>;
+    return this.findByIdOrThrow(id);
   }
 
   /**

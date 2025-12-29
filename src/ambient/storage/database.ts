@@ -75,10 +75,11 @@ export class DatabaseConnection {
 
   /**
    * トランザクション内で処理を実行する
-   * @param fn トランザクション内で実行する関数
+   * 注意: better-sqlite3は同期APIのため、コールバック関数も同期である必要があります
+   * @param fn トランザクション内で実行する関数（同期のみ）
    * @returns 関数の戻り値
    */
-  async transaction<T>(fn: (db: Database.Database) => T): Promise<T> {
+  transaction<T>(fn: (db: Database.Database) => T): T {
     const db = this.getDb();
 
     try {

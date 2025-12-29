@@ -20,6 +20,7 @@ export class Scheduler {
       lookaheadHours: config.lookaheadHours,
       internalDomain: config.internalDomain,
       oneOnOneTitlePattern: config.oneOnOneTitlePattern || /1\s*on\s*1|1\s*:?\s*1|one\s*on\s*one/i,
+      matchAll2PersonMeetings: config.matchAll2PersonMeetings !== undefined ? config.matchAll2PersonMeetings : true,
     };
   }
 
@@ -33,17 +34,20 @@ export class Scheduler {
     const start = new Date();
     const end = addHours(start, this.config.lookaheadHours);
 
+    // メールアドレスを正規化
+    const normalizedMyEmail = this.normalizeEmail(myEmail);
+
     // カレンダーからイベントを取得
     const events = await this.calendarClient.getEventsInPeriod(myEmail, start, end);
 
     // 1on1候補を抽出
-    const oneOnOneCandidates = this.filter1on1Events(events, myEmail);
+    const oneOnOneCandidates = this.filter1on1Events(events, normalizedMyEmail);
 
     // 各候補からJobを作成（冪等）
     const jobs: Job[] = [];
     for (const event of oneOnOneCandidates) {
       // 自分以外の参加者を特定
-      const attendee = event.attendees?.find(a => a.email !== myEmail);
+      const attendee = event.attendees?.find(a => this.normalizeEmail(a.email) !== normalizedMyEmail);
       if (!attendee) {
         continue;
       }
@@ -65,7 +69,7 @@ export class Scheduler {
   /**
    * 1on1イベントを抽出する
    * @param events カレンダーイベントの配列
-   * @param myEmail 自分のメールアドレス
+   * @param myEmail 自分のメールアドレス（正規化済み）
    * @returns 1on1候補の配列
    */
   private filter1on1Events(events: CalendarEvent[], myEmail: string): CalendarEvent[] {
@@ -81,7 +85,7 @@ export class Scheduler {
       }
 
       // 自分が参加者に含まれていない場合は除外
-      const includesMe = event.attendees.some(a => a.email === myEmail);
+      const includesMe = event.attendees.some(a => this.normalizeEmail(a.email) === myEmail);
       if (!includesMe) {
         return false;
       }
@@ -94,11 +98,14 @@ export class Scheduler {
         return false;
       }
 
-      // タイトルに"1on1"が含まれるか、参加者が2人の場合は1on1とみなす
-      const titleMatches = this.config.oneOnOneTitlePattern!.test(event.summary);
-      const isTwoPersonMeeting = event.attendees.length === 2;
+      // matchAll2PersonMeetings=true の場合は2人ミーティングをすべて1on1とみなす
+      // false の場合はタイトルパターンに一致するもののみを1on1とみなす
+      if (this.config.matchAll2PersonMeetings) {
+        return true;
+      }
 
-      return titleMatches || isTwoPersonMeeting;
+      // タイトルパターンに一致するかチェック
+      return this.config.oneOnOneTitlePattern!.test(event.summary);
     });
   }
 
@@ -108,6 +115,17 @@ export class Scheduler {
    * @returns 内部ドメインの場合はtrue
    */
   private isInternalEmail(email: string): boolean {
-    return email.endsWith(`@${this.config.internalDomain}`);
+    const normalizedEmail = this.normalizeEmail(email);
+    const normalizedDomain = this.config.internalDomain.toLowerCase().trim();
+    return normalizedEmail.endsWith(`@${normalizedDomain}`);
+  }
+
+  /**
+   * メールアドレスを正規化する（小文字化・トリム）
+   * @param email メールアドレス
+   * @returns 正規化されたメールアドレス
+   */
+  private normalizeEmail(email: string): string {
+    return email.toLowerCase().trim();
   }
 }

@@ -20,4 +20,12 @@ export interface SchedulerConfig {
    * 1on1判定用のタイトルパターン（正規表現）
    */
   oneOnOneTitlePattern?: RegExp;
+
+  /**
+   * 2人のミーティングをすべて1on1として扱うか
+   * true: タイトルに関係なく2人のミーティングをすべて1on1とみなす
+   * false: タイトルパターンにマッチするミーティングのみを1on1とみなす
+   * デフォルト: true
+   */
+  matchAll2PersonMeetings?: boolean;
 }
