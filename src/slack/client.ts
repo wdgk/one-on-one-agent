@@ -261,4 +261,32 @@ export class SlackClient {
       return [];
     }
   }
+
+  /**
+   * ユーザーにダイレクトメッセージを送信する
+   * @param userId Slack user ID
+   * @param text メッセージ本文
+   * @returns Slack APIレスポンス
+   */
+  async sendDirectMessage(userId: string, text: string): Promise<any> {
+    if (!this.client) {
+      throw new Error('Slack APIに接続されていません。connect()を先に呼び出してください。');
+    }
+
+    try {
+      const response = await this.client.chat.postMessage({
+        channel: userId, // ユーザーIDを指定するとDMになる
+        text,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Slack DM送信失敗: ${response.error}`);
+      }
+
+      return response;
+    } catch (error) {
+      console.error(`Slack DM送信エラー: ${error}`);
+      throw error;
+    }
+  }
 }

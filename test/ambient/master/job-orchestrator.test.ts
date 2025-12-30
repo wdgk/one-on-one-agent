@@ -299,4 +299,157 @@ describe('JobOrchestrator', () => {
       ).rejects.toThrow('LLM API error');
     });
   });
+
+  describe('deliverAgenda', () => {
+    it('最新のArtifactを取得してDeliveryServiceで配信できること', async () => {
+      const mockDeliveryService = {
+        sendToSlack: vi.fn().mockResolvedValue({
+          id: 'delivery-1',
+          jobId: 'job-1',
+          revision: 1,
+          channel: 'slack',
+          target: 'U12345',
+          status: 'sent',
+          externalId: '1234567890.123456',
+          sentAt: '2025-12-30T10:00:00Z',
+          errorMessage: null,
+          createdAt: '2025-12-30T10:00:00Z',
+          idempotencyKey: 'job-1|slack|U12345|1',
+        }),
+      };
+
+      const mockArtifactRepository = {
+        findLatestByJobId: vi.fn().mockResolvedValue({
+          id: 'artifact-1',
+          jobId: 'job-1',
+          revision: 1,
+          artifactType: 'markdown',
+          content: '# 1on1アジェンダ',
+          filePath: null,
+          sha256: 'abc123',
+          createdAt: '2025-12-30T10:00:00Z',
+        }),
+      };
+
+      const orchestratorWithDelivery = new JobOrchestrator(
+        jobRepository,
+        taskRepository,
+        taskQueue,
+        undefined,
+        mockDeliveryService as any,
+        mockArtifactRepository as any
+      );
+
+      const job = await jobRepository.upsert({
+        eventId: 'test-event-1',
+        attendeeEmail: 'test@example.com',
+        attendeeName: 'Test User',
+        startAt: '2025-01-15T10:00:00Z',
+        endAt: '2025-01-15T11:00:00Z',
+      });
+
+      await orchestratorWithDelivery.deliverAgenda(job.id);
+
+      expect(mockArtifactRepository.findLatestByJobId).toHaveBeenCalledWith(job.id);
+      expect(mockDeliveryService.sendToSlack).toHaveBeenCalledWith(job.id, 'artifact-1');
+
+      // Job状態がSENT_PREVIEWに更新されること
+      const updatedJob = await jobRepository.findById(job.id);
+      expect(updatedJob?.status).toBe('SENT_PREVIEW');
+    });
+
+    it('DeliveryServiceがない場合はスキップすること', async () => {
+      const orchestratorWithoutDelivery = new JobOrchestrator(
+        jobRepository,
+        taskRepository,
+        taskQueue
+      );
+
+      const job = await jobRepository.upsert({
+        eventId: 'test-event-1',
+        attendeeEmail: 'test@example.com',
+        attendeeName: 'Test User',
+        startAt: '2025-01-15T10:00:00Z',
+        endAt: '2025-01-15T11:00:00Z',
+      });
+
+      // エラーにならずスキップされることを確認
+      await expect(orchestratorWithoutDelivery.deliverAgenda(job.id)).resolves.toBeUndefined();
+    });
+
+    it('Artifactが存在しない場合はエラーになること', async () => {
+      const mockDeliveryService = {
+        sendToSlack: vi.fn(),
+      };
+
+      const mockArtifactRepository = {
+        findLatestByJobId: vi.fn().mockResolvedValue(null),
+      };
+
+      const orchestratorWithDelivery = new JobOrchestrator(
+        jobRepository,
+        taskRepository,
+        taskQueue,
+        undefined,
+        mockDeliveryService as any,
+        mockArtifactRepository as any
+      );
+
+      const job = await jobRepository.upsert({
+        eventId: 'test-event-1',
+        attendeeEmail: 'test@example.com',
+        attendeeName: 'Test User',
+        startAt: '2025-01-15T10:00:00Z',
+        endAt: '2025-01-15T11:00:00Z',
+      });
+
+      await expect(
+        orchestratorWithDelivery.deliverAgenda(job.id)
+      ).rejects.toThrow('No artifact found');
+    });
+
+    it('配信エラー時はJob状態をFAILEDにすること', async () => {
+      const mockDeliveryService = {
+        sendToSlack: vi.fn().mockRejectedValue(new Error('Slack API error')),
+      };
+
+      const mockArtifactRepository = {
+        findLatestByJobId: vi.fn().mockResolvedValue({
+          id: 'artifact-1',
+          jobId: 'job-1',
+          revision: 1,
+          artifactType: 'markdown',
+          content: '# 1on1アジェンダ',
+          filePath: null,
+          sha256: 'abc123',
+          createdAt: '2025-12-30T10:00:00Z',
+        }),
+      };
+
+      const orchestratorWithDelivery = new JobOrchestrator(
+        jobRepository,
+        taskRepository,
+        taskQueue,
+        undefined,
+        mockDeliveryService as any,
+        mockArtifactRepository as any
+      );
+
+      const job = await jobRepository.upsert({
+        eventId: 'test-event-1',
+        attendeeEmail: 'test@example.com',
+        attendeeName: 'Test User',
+        startAt: '2025-01-15T10:00:00Z',
+        endAt: '2025-01-15T11:00:00Z',
+      });
+
+      await expect(
+        orchestratorWithDelivery.deliverAgenda(job.id)
+      ).rejects.toThrow('Slack API error');
+
+      // Job状態がFAILEDに更新されること
+      const updatedJob = await jobRepository.findById(job.id);
+      expect(updatedJob?.status).toBe('FAILED');
+    });
+  });
 });

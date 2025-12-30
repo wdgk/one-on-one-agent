@@ -3,6 +3,8 @@ import type { TaskRepository } from '../storage/task-repository.js';
 import type { TaskQueue } from './task-queue.js';
 import type { Source } from '../storage/types.js';
 import type { AgendaService } from '../service/agenda-service.js';
+import type { DeliveryService } from '../service/delivery-service.js';
+import type { ArtifactRepository } from '../storage/artifact-repository.js';
 
 /**
  * JobOrchestrator - Job状態管理とタスク制御を統括する
@@ -12,7 +14,9 @@ export class JobOrchestrator {
     private jobRepository: JobRepository,
     private taskRepository: TaskRepository,
     private taskQueue: TaskQueue,
-    private agendaService?: AgendaService
+    private agendaService?: AgendaService,
+    private deliveryService?: DeliveryService,
+    private artifactRepository?: ArtifactRepository
   ) {}
 
   /**
@@ -85,5 +89,40 @@ export class JobOrchestrator {
 
     // AgendaServiceを呼び出してAgendaを生成
     await this.agendaService.generateAgendaFromFacts(jobId, member, period);
+  }
+
+  /**
+   * Agendaを配信する
+   * @param jobId JobのID
+   */
+  async deliverAgenda(jobId: string): Promise<void> {
+    // DeliveryServiceまたはArtifactRepositoryが未設定の場合はスキップ
+    if (!this.deliveryService || !this.artifactRepository) {
+      return;
+    }
+
+    // Jobを取得
+    const job = await this.jobRepository.findById(jobId);
+    if (!job) {
+      throw new Error(`Job not found: ${jobId}`);
+    }
+
+    // 最新のArtifactを取得
+    const artifact = await this.artifactRepository.findLatestByJobId(jobId);
+    if (!artifact) {
+      throw new Error(`No artifact found for job: ${jobId}`);
+    }
+
+    try {
+      // Slack DMに送信
+      await this.deliveryService.sendToSlack(jobId, artifact.id);
+
+      // Job状態をSENT_PREVIEWに更新
+      await this.jobRepository.updateStatus(jobId, 'SENT_PREVIEW');
+    } catch (error) {
+      // エラー時はJob状態をFAILEDに更新
+      await this.jobRepository.updateStatus(jobId, 'FAILED', error instanceof Error ? error.message : String(error));
+      throw error;
+    }
   }
 }
