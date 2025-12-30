@@ -260,6 +260,39 @@ export class OneOnOneAgendaAgent {
   }
 
   /**
+   * AgendaInputから直接アジェンダを生成する（Ambient Agent用）
+   * @param agendaInput 構築済みのAgendaInput
+   * @param options オプション
+   * @returns 生成されたアジェンダ
+   */
+  async generateAgendaFromInput(
+    agendaInput: AgendaInput,
+    options?: { dryRun?: boolean; templateDir?: string }
+  ): Promise<AgendaOutput> {
+    let markdown: string;
+
+    if (options?.dryRun) {
+      markdown = this.generateDryRunOutput(agendaInput);
+    } else {
+      // アジェンダ生成
+      markdown = await this.agendaGenerator.generate(agendaInput);
+    }
+
+    // AgendaOutput作成
+    return {
+      markdown,
+      metadata: {
+        memberId: agendaInput.member.id,
+        memberName: agendaInput.member.name,
+        periodStart: agendaInput.period.start,
+        periodEnd: agendaInput.period.end,
+        generatedAt: new Date().toISOString(),
+        issueCount: agendaInput.backlog.issues.length,
+      },
+    };
+  }
+
+  /**
    * リソースのクリーンアップ
    */
   async cleanup(): Promise<void> {

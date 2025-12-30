@@ -29,7 +29,7 @@ export type DeliveryStatus = 'pending' | 'sent' | 'failed';
 /**
  * 情報源
  */
-export type Source = 'slack' | 'backlog' | 'github';
+export type Source = 'slack' | 'backlog' | 'github' | 'calendar';
 
 /**
  * 配信チャネル
