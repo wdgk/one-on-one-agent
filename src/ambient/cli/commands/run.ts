@@ -183,9 +183,13 @@ export async function runCommand(
 
           // 配信処理（deliverオプションが指定されている場合）
           if (options.deliver) {
-            console.log(`📮 [${job.attendeeName}] アジェンダ配信中...`);
-            await jobOrchestrator.deliverAgenda(job.id);
-            console.log(`✅ [${job.attendeeName}] アジェンダ配信完了（Slack DM送信済み）`);
+            if (slackClient.isAvailable()) {
+              console.log(`📮 [${job.attendeeName}] アジェンダ配信中...`);
+              await jobOrchestrator.deliverAgenda(job.id);
+              console.log(`✅ [${job.attendeeName}] アジェンダ配信完了（Slack DM送信済み）`);
+            } else {
+              console.log(`⚠️  [${job.attendeeName}] 配信スキップ: Slack設定が必要です`);
+            }
           }
         } catch (error) {
           console.error(`❌ [${job.attendeeName}] エラー: ${error instanceof Error ? error.message : String(error)}`);
