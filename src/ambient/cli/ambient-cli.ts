@@ -25,6 +25,7 @@ async function main() {
         let lookaheadHours: number | undefined;
         let dryRun = false;
         let generateAgenda = false;
+        let deliver = false;
 
         for (let i = 1; i < args.length; i++) {
           const arg = args[i];
@@ -32,6 +33,8 @@ async function main() {
             dryRun = true;
           } else if (arg === '--generate-agenda' || arg === '-g') {
             generateAgenda = true;
+          } else if (arg === '--deliver') {
+            deliver = true;
           } else if (arg === '--lookahead') {
             const value = args[i + 1];
             if (value && value.endsWith('h')) {
@@ -41,7 +44,7 @@ async function main() {
           }
         }
 
-        await runCommand(config, { lookaheadHours, dryRun, generateAgenda });
+        await runCommand(config, { lookaheadHours, dryRun, generateAgenda, deliver });
         break;
       }
 
@@ -111,6 +114,7 @@ Ambient Agent CLI - ゼロタッチ 1on1 アジェンダエージェント
     --lookahead <hours>   先読み時間（例: --lookahead 48h）
     --dry-run, -d         ドライランモード
     --generate-agenda, -g アジェンダを自動生成
+    --deliver             アジェンダをSlack DMに配信（-gと併用）
 
   list [options]        Job一覧を表示（未実装）
   approve <job_id>      Jobを承認（未実装）
@@ -124,6 +128,7 @@ Ambient Agent CLI - ゼロタッチ 1on1 アジェンダエージェント
   ambient run
   ambient run --lookahead 24h
   ambient run --dry-run
+  ambient run --generate-agenda --deliver
 `);
 }
 

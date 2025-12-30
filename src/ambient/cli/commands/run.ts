@@ -3,6 +3,7 @@ import { JobRepository } from '../../storage/job-repository.js';
 import { TaskRepository } from '../../storage/task-repository.js';
 import { FactRepository } from '../../storage/fact-repository.js';
 import { ArtifactRepository } from '../../storage/artifact-repository.js';
+import { DeliveryRepository } from '../../storage/delivery-repository.js';
 import { Scheduler } from '../../master/scheduler.js';
 import { TaskQueue } from '../../master/task-queue.js';
 import { JobOrchestrator } from '../../master/job-orchestrator.js';
@@ -11,6 +12,7 @@ import { BacklogCollector } from '../../workers/backlog-collector.js';
 import { CalendarCollector } from '../../workers/calendar-collector.js';
 import { FactTransformer } from '../../transform/fact-transformer.js';
 import { AgendaService } from '../../service/agenda-service.js';
+import { DeliveryService } from '../../service/delivery-service.js';
 import { CalendarClient } from '../../../calendar/client.js';
 import { SlackClient } from '../../../slack/client.js';
 import { BacklogClient } from '../../../backlog/client.js';
@@ -29,6 +31,7 @@ export async function runCommand(
     lookaheadHours?: number;
     dryRun?: boolean;
     generateAgenda?: boolean;
+    deliver?: boolean;
   }
 ): Promise<void> {
   console.log('🚀 Ambient Agent を実行します...\n');
@@ -39,6 +42,10 @@ export async function runCommand(
 
   if (options.generateAgenda) {
     console.log('📝 アジェンダ生成モード: Facts収集とアジェンダ生成を実行します\n');
+  }
+
+  if (options.deliver) {
+    console.log('📮 配信モード: アジェンダをSlack DMに送信します\n');
   }
 
   // クライアント変数をtry外で宣言（cleanup用）
@@ -54,6 +61,7 @@ export async function runCommand(
     const taskRepository = new TaskRepository(db);
     const factRepository = new FactRepository(db);
     const artifactRepository = new ArtifactRepository(db);
+    const deliveryRepository = new DeliveryRepository(db);
     console.log('✅ データベース接続完了\n');
 
     // Calendarクライアント初期化
@@ -136,12 +144,24 @@ export async function runCommand(
         agendaAgent
       );
 
+      // DeliveryServiceを初期化（Slack利用可能かつdeliverオプションが指定されている場合）
+      const deliveryService = (options.deliver && slackClient.isAvailable())
+        ? new DeliveryService(
+            deliveryRepository,
+            artifactRepository,
+            jobRepository,
+            slackClient
+          )
+        : undefined;
+
       // JobOrchestratorを初期化
       const jobOrchestrator = new JobOrchestrator(
         jobRepository,
         taskRepository,
         taskQueue,
-        agendaService
+        agendaService,
+        deliveryService,
+        artifactRepository
       );
 
       // 各Jobに対してFacts収集とアジェンダ生成を実行
@@ -160,6 +180,13 @@ export async function runCommand(
           console.log(`📝 [${job.attendeeName}] アジェンダ生成中...`);
           await jobOrchestrator.generateAgenda(job.id);
           console.log(`✅ [${job.attendeeName}] アジェンダ生成完了`);
+
+          // 配信処理（deliverオプションが指定されている場合）
+          if (options.deliver) {
+            console.log(`📮 [${job.attendeeName}] アジェンダ配信中...`);
+            await jobOrchestrator.deliverAgenda(job.id);
+            console.log(`✅ [${job.attendeeName}] アジェンダ配信完了（Slack DM送信済み）`);
+          }
         } catch (error) {
           console.error(`❌ [${job.attendeeName}] エラー: ${error instanceof Error ? error.message : String(error)}`);
         }
