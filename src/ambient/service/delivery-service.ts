@@ -28,6 +28,11 @@ export class DeliveryService {
       throw new Error(`Artifact not found: ${artifactId}`);
     }
 
+    // ArtifactがJobに属していることを検証
+    if (artifact.jobId !== jobId) {
+      throw new Error(`Artifact ${artifactId} does not belong to job ${jobId}`);
+    }
+
     // Jobを取得
     const job = await this.jobRepository.findById(jobId);
     if (!job) {
