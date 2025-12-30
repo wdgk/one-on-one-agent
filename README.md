@@ -4,10 +4,17 @@ Backlogの活動データから1on1アジェンダを自動生成するCLIツー
 
 ## 特徴
 
+### 対話型アジェンダ生成（`agenda`コマンド）
 - Backlog課題・PRの自動収集（MCP経由）
 - AWS Bedrock経由でClaude AIによる構造化アジェンダ生成
 - 自然言語での指示に対応
 - Markdown形式での出力
+
+### ゼロタッチ配信（`ambient`コマンド）
+- Google Calendarから1on1イベントを自動抽出
+- Slack/Backlog/Calendarから関連情報を自動収集
+- アジェンダを自動生成してSlack DMに配信
+- 完全自動化によるゼロタッチ運用
 
 ## 必須要件
 
@@ -86,11 +93,42 @@ BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
 
 3. **IAM Role**: EC2/ECS/Lambda上で実行する場合は自動取得
 
-#### Slack統合（オプション）
+#### Google Calendar設定（Ambient Agentで必須）
+
+```env
+GOOGLE_CALENDAR_CREDENTIALS_PATH=/path/to/credentials.json
+GOOGLE_CALENDAR_TOKEN_PATH=/path/to/token.json
+```
+
+- **GOOGLE_CALENDAR_CREDENTIALS_PATH**: Google Cloud ConsoleからダウンロードしたOAuth 2.0認証情報ファイルのパス
+- **GOOGLE_CALENDAR_TOKEN_PATH**: 認証トークンを保存するファイルのパス（初回実行時に自動生成）
+
+Google Calendar APIの設定方法は[Google Calendar API Quickstart](https://developers.google.com/calendar/api/quickstart/nodejs)を参照してください。
+
+#### Slack統合（Ambient Agentでオプション）
 
 ```env
 SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_USER_TOKEN=xoxp-your-user-token
+```
+
+- **SLACK_BOT_TOKEN**: Slack App > OAuth & Permissions > Bot User OAuth Token
+- **SLACK_USER_TOKEN**: Slack App > OAuth & Permissions > User OAuth Token
+
+#### Ambient Agent設定（オプション）
+
+```env
+# データベースパス（デフォルト: ./ambient.db）
+AMBIENT_DB_PATH=/path/to/ambient.db
+
+# 1on1カレンダーの先読み時間（デフォルト: 168時間 = 7日）
+AMBIENT_LOOKAHEAD_HOURS=168
+
+# 社内ドメイン（この文字列を含むメールアドレスを社内として認識）
+AMBIENT_INTERNAL_DOMAIN=@example.com
+
+# 自分のメールアドレス（Calendarから1on1を抽出する際に使用）
+AMBIENT_MY_EMAIL=your-email@example.com
 ```
 
 ### 4. ビルド
@@ -105,9 +143,13 @@ npm run build
 npm link
 ```
 
-これにより、`npm run agenda`の代わりに`agenda`コマンドが使えるようになります。
+これにより、以下のコマンドが使えるようになります：
+- `agenda`: 対話型アジェンダ生成
+- `ambient`: ゼロタッチ配信
 
 ## 使い方
+
+## 対話型アジェンダ生成（`agenda`コマンド）
 
 ### 基本的な使い方
 
@@ -151,7 +193,83 @@ output/agenda_佐藤太郎_2024-11-15.md
 - 1on1での質問案
 - メモ欄
 
-## バッチ処理
+## ゼロタッチ配信（`ambient`コマンド）
+
+Ambient Agentは、Google Calendarから1on1イベントを自動抽出し、関連情報を収集してアジェンダを生成・配信する完全自動化ツールです。
+
+### 基本的な使い方
+
+```bash
+# カレンダーから1on1を抽出してJobを作成
+ambient run
+
+# アジェンダを自動生成
+ambient run --generate-agenda
+
+# アジェンダを生成してSlack DMに配信
+ambient run --generate-agenda --deliver
+
+# 先読み時間を指定（デフォルト: 168時間 = 7日）
+ambient run --lookahead 48h --generate-agenda --deliver
+```
+
+### コマンドオプション
+
+| オプション | 短縮形 | 説明 |
+|----------|--------|------|
+| `--lookahead <hours>` | - | 先読み時間（例: `48h`）。デフォルトは環境変数`AMBIENT_LOOKAHEAD_HOURS`または168時間 |
+| `--dry-run` | `-d` | ドライラン（Jobの作成のみ） |
+| `--generate-agenda` | `-g` | アジェンダを自動生成 |
+| `--deliver` | - | アジェンダをSlack DMに配信（`-g`と併用） |
+
+### 動作フロー
+
+1. **Job抽出**: Google Calendarから指定期間内の1on1イベントを抽出
+2. **情報収集**: 各1on1参加者について以下を自動収集：
+   - Slack: 直近のDM履歴
+   - Backlog: 担当課題・PR・コメント
+   - Calendar: 今後の予定
+3. **アジェンダ生成**: 収集した情報からAIがアジェンダを生成
+4. **配信**: 生成したアジェンダをSlack DMに送信（`--deliver`指定時）
+
+### Job状態管理
+
+Ambient Agentは各1on1をJobとして管理し、以下の状態遷移を行います：
+
+```
+PENDING → COLLECTING → DRAFTED → SENT_PREVIEW → APPROVED → DISPATCHED
+                      ↓
+                    FAILED
+```
+
+- **PENDING**: Job作成済み（未処理）
+- **COLLECTING**: 情報収集中
+- **DRAFTED**: アジェンダ生成完了
+- **SENT_PREVIEW**: Slack DMにプレビュー送信済み
+- **APPROVED**: 承認済み（将来実装予定）
+- **DISPATCHED**: 確定版配信済み（将来実装予定）
+- **FAILED**: エラー発生
+
+### 使用例
+
+```bash
+# 明日の1on1のアジェンダを生成して配信
+ambient run --lookahead 24h --generate-agenda --deliver
+
+# 今週の1on1をスケジュール（配信はしない）
+ambient run --lookahead 168h --generate-agenda
+
+# ドライラン（何も実行しない）
+ambient run --dry-run
+```
+
+### 注意事項
+
+- `--deliver`オプションはSlack設定が必要です
+- Slack設定がない場合、警告が表示され配信はスキップされます
+- 同じJobに対して複数回実行しても冪等性が保証されます（重複配信されません）
+
+## バッチ処理（`agenda`コマンド）
 
 複数メンバーのアジェンダを一括生成できます。
 
