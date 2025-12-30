@@ -16,6 +16,7 @@ import { SlackClient } from '../../../slack/client.js';
 import { BacklogClient } from '../../../backlog/client.js';
 import { OneOnOneAgendaAgent } from '../../../agent.js';
 import type { AmbientConfig } from '../../../config/ambient-config.js';
+import type { Source } from '../../storage/types.js';
 
 /**
  * runコマンド - カレンダーから1on1を抽出してJobを作成し、オプションでアジェンダを生成する
@@ -149,7 +150,7 @@ export async function runCommand(
 
         try {
           // Facts収集（Slack利用可能な場合のみslackを含める）
-          const sources = slackClient.isAvailable()
+          const sources: Source[] = slackClient.isAvailable()
             ? ['slack', 'backlog', 'calendar']
             : ['backlog', 'calendar'];
           await jobOrchestrator.collectFacts(job.id, sources);
