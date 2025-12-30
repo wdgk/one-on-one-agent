@@ -3,6 +3,7 @@
 import 'dotenv/config';
 import { loadAmbientConfig } from '../../config/ambient-config.js';
 import { runCommand } from './commands/run.js';
+import { approveCommand } from './commands/approve.js';
 import { closeGlobalDatabaseConnection } from '../storage/database.js';
 
 /**
@@ -49,12 +50,21 @@ async function main() {
       }
 
       case 'list':
-        console.log('📋 list コマンドは未実装です（Milestone 4で実装予定）');
+        console.log('📋 list コマンドは未実装です（将来実装予定）');
         break;
 
-      case 'approve':
-        console.log('✅ approve コマンドは未実装です（Milestone 4で実装予定）');
+      case 'approve': {
+        // Job IDを取得
+        const jobId = args[1];
+        if (!jobId) {
+          console.error('❌ Job IDを指定してください');
+          console.log('使用方法: ambient approve <job_id>');
+          process.exit(1);
+        }
+
+        await approveCommand(config, jobId);
         break;
+      }
 
       case 'inspect':
         console.log('🔍 inspect コマンドは未実装です（Milestone 4で実装予定）');
@@ -117,7 +127,7 @@ Ambient Agent CLI - ゼロタッチ 1on1 アジェンダエージェント
     --deliver             アジェンダをSlack DMに配信（-gと併用）
 
   list [options]        Job一覧を表示（未実装）
-  approve <job_id>      Jobを承認（未実装）
+  approve <job_id>      Jobを承認
   inspect <job_id>      Job詳細を表示（未実装）
   drop <job_id>         Jobを削除（未実装）
   regen <job_id>        Jobを再生成（未実装）
@@ -129,6 +139,7 @@ Ambient Agent CLI - ゼロタッチ 1on1 アジェンダエージェント
   ambient run --lookahead 24h
   ambient run --dry-run
   ambient run --generate-agenda --deliver
+  ambient approve <job_id>
 `);
 }
 

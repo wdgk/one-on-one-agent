@@ -125,4 +125,19 @@ export class JobOrchestrator {
       throw error;
     }
   }
+
+  /**
+   * Agendaを承認する
+   * @param jobId JobのID
+   */
+  async approveAgenda(jobId: string): Promise<void> {
+    // Jobを取得
+    const job = await this.jobRepository.findById(jobId);
+    if (!job) {
+      throw new Error(`Job not found: ${jobId}`);
+    }
+
+    // Job状態をAPPROVEDに更新
+    await this.jobRepository.updateStatus(jobId, 'APPROVED');
+  }
 }
