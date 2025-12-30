@@ -1,16 +1,45 @@
+import pLimit from 'p-limit';
 import type { TaskRepository } from '../storage/task-repository.js';
 import type { Worker, WorkerContext } from '../workers/types.js';
 import type { Job } from '../storage/types.js';
+
+/**
+ * TaskQueueのオプション
+ */
+export interface TaskQueueOptions {
+  /** 並列実行の上限数 */
+  concurrencyLimit?: number;
+  /** 収集期間の遡り日数 */
+  lookbackDays?: number;
+}
+
+/**
+ * タスク実行結果のサマリ
+ */
+export interface TaskExecutionResult {
+  /** 成功したタスク数 */
+  succeeded: number;
+  /** 失敗したタスク数 */
+  failed: number;
+  /** 失敗したタスクの詳細 */
+  failedTasks: Array<{ taskId: string; error: string }>;
+}
 
 /**
  * TaskQueue - Taskの並列実行とリトライ制御を担当する
  */
 export class TaskQueue {
   private workers: Map<string, Worker> = new Map();
+  private limit: ReturnType<typeof pLimit>;
+  private lookbackDays: number;
 
   constructor(
-    private taskRepository: TaskRepository
-  ) {}
+    private taskRepository: TaskRepository,
+    options: TaskQueueOptions = {}
+  ) {
+    this.limit = pLimit(options.concurrencyLimit ?? 5);
+    this.lookbackDays = options.lookbackDays ?? 14;
+  }
 
   /**
    * Workerを登録する
@@ -62,14 +91,37 @@ export class TaskQueue {
 
       // 結果に基づいてステータスを更新
       if (result.error) {
-        await this.taskRepository.updateStatus(task.id, 'FAILED', result.error);
+        // リトライ可能かチェック
+        await this.handleFailure(task.id, result.error);
       } else {
         await this.taskRepository.updateStatus(task.id, 'DONE');
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      await this.taskRepository.updateStatus(task.id, 'FAILED', errorMessage);
+      await this.handleFailure(task.id, errorMessage);
       throw error;
+    }
+  }
+
+  /**
+   * Task失敗時の処理（リトライまたはFAILED）
+   * @param taskId TaskのID
+   * @param errorMessage エラーメッセージ
+   */
+  private async handleFailure(taskId: string, errorMessage: string): Promise<void> {
+    const task = await this.taskRepository.findById(taskId);
+    if (!task) {
+      return;
+    }
+
+    // 現在のretryCountをチェック
+    if (task.retryCount < task.maxRetries) {
+      // リトライカウントを増やしてQUEUEDに戻す
+      await this.taskRepository.incrementRetryCount(taskId);
+      await this.taskRepository.updateStatus(taskId, 'QUEUED');
+    } else {
+      // maxRetries以上ならFAILED
+      await this.taskRepository.updateStatus(taskId, 'FAILED', errorMessage);
     }
   }
 
@@ -77,12 +129,32 @@ export class TaskQueue {
    * 複数のTaskを実行する
    * @param taskIds TaskのID配列
    * @param job 対象のJob
+   * @returns 実行結果のサマリ
    */
-  async executeTasks(taskIds: string[], job: Job): Promise<void> {
-    // すべてのTaskを並列実行（一部が失敗しても他は実行を継続）
-    await Promise.allSettled(
-      taskIds.map(taskId => this.executeTask(taskId, job))
+  async executeTasks(taskIds: string[], job: Job): Promise<TaskExecutionResult> {
+    // p-limitで並列数を制限しつつ実行（一部が失敗しても他は実行を継続）
+    const results = await Promise.allSettled(
+      taskIds.map(taskId =>
+        this.limit(() => this.executeTask(taskId, job))
+      )
     );
+
+    // 結果を集計
+    const succeeded = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+    const failedTasks: Array<{ taskId: string; error: string }> = [];
+
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      if (result.status === 'rejected') {
+        failedTasks.push({
+          taskId: taskIds[i],
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      }
+    }
+
+    return { succeeded, failed, failedTasks };
   }
 
   /**
@@ -91,10 +163,8 @@ export class TaskQueue {
    * @returns 開始日時（ISO 8601）
    */
   private calculatePeriodStart(job: Job): string {
-    // デフォルトは14日前
-    const lookbackDays = 14;
     const startDate = new Date(job.startAt);
-    startDate.setDate(startDate.getDate() - lookbackDays);
+    startDate.setDate(startDate.getDate() - this.lookbackDays);
     return startDate.toISOString();
   }
 }

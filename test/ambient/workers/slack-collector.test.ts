@@ -246,5 +246,65 @@ describe('SlackCollector', () => {
       expect(result.facts).toHaveLength(0);
       expect(result.error).toContain('Slack API Error');
     });
+
+    it('同じメッセージを再収集しても重複作成しないこと（冪等性）', async () => {
+      const job = await jobRepository.upsert({
+        eventId: 'test-event-1',
+        attendeeEmail: 'member@example.com',
+        attendeeName: 'Test Member',
+        startAt: '2025-01-15T10:00:00Z',
+        endAt: '2025-01-15T11:00:00Z',
+      });
+
+      const task = await taskRepository.create({
+        jobId: job.id,
+        source: 'slack',
+        status: 'QUEUED',
+        priority: 0,
+      });
+
+      const context: WorkerContext = {
+        job,
+        task,
+        periodStart: '2025-01-01T00:00:00Z',
+        periodEnd: '2025-01-15T00:00:00Z',
+      };
+
+      const mockMessages = [
+        {
+          id: '1704067200.000001',
+          text: 'Test message 1',
+          user: 'U123456',
+          channel: 'C123456',
+          channelName: 'general',
+          ts: '1704067200.000001',
+          type: 'message',
+          permalink: 'https://example.slack.com/archives/C123456/p1704067200000001',
+        },
+      ];
+
+      vi.mocked(mockSlackClient.findUserByEmail).mockResolvedValue({
+        id: 'U123456',
+        name: 'testmember',
+        realName: 'Test Member',
+        email: 'member@example.com',
+      });
+
+      vi.mocked(mockSlackClient.getMessagesInPeriod).mockResolvedValue(mockMessages);
+
+      // 1回目の収集
+      const result1 = await slackCollector.collect(context);
+      expect(result1.count).toBe(1);
+      expect(result1.facts).toHaveLength(1);
+
+      // 2回目の収集（同じメッセージ）
+      const result2 = await slackCollector.collect(context);
+      expect(result2.count).toBe(0); // 重複なので作成されない
+      expect(result2.facts).toHaveLength(0);
+
+      // DBには1件のみ存在すること
+      const allFacts = await factRepository.findByJobId(job.id);
+      expect(allFacts).toHaveLength(1);
+    });
   });
 });

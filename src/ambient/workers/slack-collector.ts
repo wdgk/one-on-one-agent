@@ -54,9 +54,18 @@ export class SlackCollector implements Worker {
         new Date(periodEnd)
       );
 
-      // メッセージをFactsに変換して保存
+      // メッセージをFactsに変換して保存（重複チェック）
       const facts = [];
       for (const message of messages) {
+        const url = message.permalink || '';
+
+        // 既に同じURLのFactが存在するかチェック（冪等性）
+        const existing = await this.factRepository.findByUrl(job.id, url);
+        if (existing) {
+          // 既に存在する場合はスキップ
+          continue;
+        }
+
         // tsから日時を復元（tsはUnix timestampの文字列）
         const occurredAt = new Date(parseFloat(message.ts) * 1000).toISOString();
 
@@ -65,7 +74,7 @@ export class SlackCollector implements Worker {
           source: 'slack',
           occurredAt,
           summary: this.createSummary(message),
-          url: message.permalink || '',
+          url,
           confidence: 1.0,
           score: 0.0,
           rawRef: JSON.stringify({

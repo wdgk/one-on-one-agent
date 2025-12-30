@@ -27,7 +27,10 @@ describe('JobOrchestrator', () => {
     jobRepository = new JobRepository(db);
     taskRepository = new TaskRepository(db);
     factRepository = new FactRepository(db);
-    taskQueue = new TaskQueue(taskRepository);
+    taskQueue = new TaskQueue(taskRepository, {
+      concurrencyLimit: 5,
+      lookbackDays: 14,
+    });
     jobOrchestrator = new JobOrchestrator(
       jobRepository,
       taskRepository,
@@ -152,11 +155,13 @@ describe('JobOrchestrator', () => {
       const updatedJob = await jobRepository.findById(job.id);
       expect(updatedJob?.status).toBe('COLLECTING');
 
-      // 成功したTaskと失敗したTaskが存在することを確認
+      // 成功したTaskと失敗したTask（リトライのためQUEUEDに戻る）が存在することを確認
       const tasks = await taskRepository.findByJobId(job.id);
       expect(tasks).toHaveLength(2);
       expect(tasks.find(t => t.source === 'slack')?.status).toBe('DONE');
-      expect(tasks.find(t => t.source === 'backlog')?.status).toBe('FAILED');
+      // リトライロジックによりQUEUEDに戻る
+      expect(tasks.find(t => t.source === 'backlog')?.status).toBe('QUEUED');
+      expect(tasks.find(t => t.source === 'backlog')?.retryCount).toBe(1);
     });
 
     it('同じJobに対して複数回呼び出しても冪等であること', async () => {
