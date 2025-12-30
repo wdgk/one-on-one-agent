@@ -171,6 +171,32 @@ export class DeliveryRepository {
   }
 
   /**
+   * JobIDとRevisionに紐づくDeliveryを検索する
+   * @param jobId JobのID
+   * @param revision リビジョン番号
+   * @returns マッチするDeliveryの配列
+   */
+  async findByJobIdAndRevision(jobId: string, revision: number): Promise<Delivery[]> {
+    const database = this.db.getDb();
+
+    const deliveries = database
+      .prepare(
+        `
+      SELECT
+        id, job_id as jobId, revision, channel, target, status,
+        external_id as externalId, sent_at as sentAt, error_message as errorMessage,
+        created_at as createdAt, idempotency_key as idempotencyKey
+      FROM deliveries
+      WHERE job_id = ? AND revision = ?
+      ORDER BY created_at ASC
+    `
+      )
+      .all(jobId, revision) as Delivery[];
+
+    return deliveries;
+  }
+
+  /**
    * レコードを更新する
    * @param id DeliveryのID
    * @param data 更新データ
