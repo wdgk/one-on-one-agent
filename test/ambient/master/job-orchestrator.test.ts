@@ -27,7 +27,7 @@ describe('JobOrchestrator', () => {
     jobRepository = new JobRepository(db);
     taskRepository = new TaskRepository(db);
     factRepository = new FactRepository(db);
-    taskQueue = new TaskQueue(taskRepository, factRepository);
+    taskQueue = new TaskQueue(taskRepository);
     jobOrchestrator = new JobOrchestrator(
       jobRepository,
       taskRepository,

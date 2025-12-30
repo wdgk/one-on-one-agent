@@ -79,8 +79,8 @@ export class TaskQueue {
    * @param job 対象のJob
    */
   async executeTasks(taskIds: string[], job: Job): Promise<void> {
-    // すべてのTaskを並列実行
-    await Promise.all(
+    // すべてのTaskを並列実行（一部が失敗しても他は実行を継続）
+    await Promise.allSettled(
       taskIds.map(taskId => this.executeTask(taskId, job))
     );
   }
