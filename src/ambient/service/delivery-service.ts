@@ -34,12 +34,12 @@ export class DeliveryService {
       throw new Error(`Job not found: ${jobId}`);
     }
 
-    // 既に配信済みかチェック（冪等性）
+    // 既に配信成功済みかチェック（冪等性）
     const existingDeliveries = await this.deliveryRepository.findByJobIdAndRevision(
       jobId,
       artifact.revision
     );
-    const existingSlackDelivery = existingDeliveries.find((d: Delivery) => d.channel === 'slack');
+    const existingSlackDelivery = existingDeliveries.find((d: Delivery) => d.channel === 'slack' && d.status === 'sent');
     if (existingSlackDelivery) {
       return existingSlackDelivery;
     }
