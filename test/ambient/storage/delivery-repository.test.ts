@@ -16,7 +16,7 @@ describe('DeliveryRepository', () => {
 
   beforeEach(async () => {
     // テスト用の一時DBファイルを作成
-    dbPath = join(tmpdir(), `test-ambient-${Date.now()}.db`);
+    dbPath = join(tmpdir(), `test-ambient-${Date.now()}-${Math.random().toString(36).substring(7)}.db`);
     db = new DatabaseConnection(dbPath);
     await db.connect();
     jobRepository = new JobRepository(db);
