@@ -452,4 +452,31 @@ describe('JobOrchestrator', () => {
       expect(updatedJob?.status).toBe('FAILED');
     });
   });
+
+  describe('approveAgenda', () => {
+    it('Jobを承認してAPPROVED状態に更新できること', async () => {
+      const job = await jobRepository.upsert({
+        eventId: 'test-event-1',
+        attendeeEmail: 'test@example.com',
+        attendeeName: 'Test User',
+        startAt: '2025-01-15T10:00:00Z',
+        endAt: '2025-01-15T11:00:00Z',
+      });
+
+      // Job状態をSENT_PREVIEWに更新
+      await jobRepository.updateStatus(job.id, 'SENT_PREVIEW');
+
+      await jobOrchestrator.approveAgenda(job.id);
+
+      // Job状態がAPPROVEDに更新されること
+      const updatedJob = await jobRepository.findById(job.id);
+      expect(updatedJob?.status).toBe('APPROVED');
+    });
+
+    it('Jobが見つからない場合はエラーになること', async () => {
+      await expect(
+        jobOrchestrator.approveAgenda('non-existent-id')
+      ).rejects.toThrow('Job not found');
+    });
+  });
 });
