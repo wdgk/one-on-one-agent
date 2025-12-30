@@ -58,6 +58,11 @@ export class ArtifactRepository {
         now
       );
 
+    // Jobのrevisionを更新
+    database
+      .prepare('UPDATE jobs SET revision = ? WHERE id = ?')
+      .run(revision, data.jobId);
+
     return this.findByIdOrThrow(id);
   }
 
