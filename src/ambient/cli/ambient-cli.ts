@@ -24,11 +24,14 @@ async function main() {
         // オプション解析
         let lookaheadHours: number | undefined;
         let dryRun = false;
+        let generateAgenda = false;
 
         for (let i = 1; i < args.length; i++) {
           const arg = args[i];
           if (arg === '--dry-run' || arg === '-d') {
             dryRun = true;
+          } else if (arg === '--generate-agenda' || arg === '-g') {
+            generateAgenda = true;
           } else if (arg === '--lookahead') {
             const value = args[i + 1];
             if (value && value.endsWith('h')) {
@@ -38,7 +41,7 @@ async function main() {
           }
         }
 
-        await runCommand(config, { lookaheadHours, dryRun });
+        await runCommand(config, { lookaheadHours, dryRun, generateAgenda });
         break;
       }
 
@@ -107,6 +110,7 @@ Ambient Agent CLI - ゼロタッチ 1on1 アジェンダエージェント
   run [options]         カレンダーから1on1を抽出してJobを作成
     --lookahead <hours>   先読み時間（例: --lookahead 48h）
     --dry-run, -d         ドライランモード
+    --generate-agenda, -g アジェンダを自動生成
 
   list [options]        Job一覧を表示（未実装）
   approve <job_id>      Jobを承認（未実装）

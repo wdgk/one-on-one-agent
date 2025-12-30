@@ -201,4 +201,102 @@ describe('JobOrchestrator', () => {
       ).rejects.toThrow('Job not found');
     });
   });
+
+  describe('generateAgenda', () => {
+    it('AgendaServiceを呼び出してArtifact IDをJobに記録できること', async () => {
+      // AgendaServiceのモック
+      const mockAgendaService = {
+        generateAgendaFromFacts: vi.fn().mockResolvedValue('artifact-123'),
+      };
+
+      const orchestratorWithAgenda = new JobOrchestrator(
+        jobRepository,
+        taskRepository,
+        taskQueue,
+        mockAgendaService as any
+      );
+
+      const job = await jobRepository.upsert({
+        eventId: 'test-event-1',
+        attendeeEmail: 'test@example.com',
+        attendeeName: 'Test User',
+        startAt: '2025-01-15T10:00:00Z',
+        endAt: '2025-01-15T11:00:00Z',
+      });
+
+      await orchestratorWithAgenda.generateAgenda(job.id);
+
+      // AgendaService.generateAgendaFromFacts が呼ばれたことを確認
+      expect(mockAgendaService.generateAgendaFromFacts).toHaveBeenCalledWith(
+        job.id,
+        { id: job.attendeeEmail, name: job.attendeeName },
+        expect.objectContaining({
+          start: expect.any(String),
+          end: expect.any(String),
+        })
+      );
+    });
+
+    it('AgendaServiceが未設定の場合はスキップすること', async () => {
+      // AgendaServiceなしのJobOrchestrator
+      const orchestratorWithoutAgenda = new JobOrchestrator(
+        jobRepository,
+        taskRepository,
+        taskQueue
+      );
+
+      const job = await jobRepository.upsert({
+        eventId: 'test-event-1',
+        attendeeEmail: 'test@example.com',
+        attendeeName: 'Test User',
+        startAt: '2025-01-15T10:00:00Z',
+        endAt: '2025-01-15T11:00:00Z',
+      });
+
+      // エラーにならずスキップされることを確認
+      await expect(orchestratorWithoutAgenda.generateAgenda(job.id)).resolves.toBeUndefined();
+    });
+
+    it('Jobが見つからない場合はエラーになること', async () => {
+      const mockAgendaService = {
+        generateAgendaFromFacts: vi.fn().mockResolvedValue('artifact-123'),
+      };
+
+      const orchestratorWithAgenda = new JobOrchestrator(
+        jobRepository,
+        taskRepository,
+        taskQueue,
+        mockAgendaService as any
+      );
+
+      await expect(
+        orchestratorWithAgenda.generateAgenda('non-existent-id')
+      ).rejects.toThrow('Job not found');
+    });
+
+    it('AgendaService呼び出しエラーはそのままthrowすること', async () => {
+      const mockAgendaService = {
+        generateAgendaFromFacts: vi.fn().mockRejectedValue(new Error('LLM API error')),
+      };
+
+      const orchestratorWithAgenda = new JobOrchestrator(
+        jobRepository,
+        taskRepository,
+        taskQueue,
+        mockAgendaService as any
+      );
+
+      const job = await jobRepository.upsert({
+        eventId: 'test-event-1',
+        attendeeEmail: 'test@example.com',
+        attendeeName: 'Test User',
+        startAt: '2025-01-15T10:00:00Z',
+        endAt: '2025-01-15T11:00:00Z',
+      });
+
+      await expect(
+        orchestratorWithAgenda.generateAgenda(job.id)
+      ).rejects.toThrow('LLM API error');
+    });
+  });
 });
