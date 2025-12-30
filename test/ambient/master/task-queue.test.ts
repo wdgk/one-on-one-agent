@@ -140,7 +140,8 @@ describe('TaskQueue', () => {
 
       taskQueue.registerWorker(mockWorker);
 
-      await taskQueue.executeTask(task.id, job);
+      // エラーがthrowされることを確認
+      await expect(taskQueue.executeTask(task.id, job)).rejects.toThrow('Test error');
 
       // ステータスがFAILEDになっていることを確認
       const updated = await taskRepository.findById(task.id);
@@ -270,10 +271,11 @@ describe('TaskQueue', () => {
 
       const result = await taskQueue.executeTasks([task1.id, task2.id], job);
 
-      // 両方とも正常にexecuteTaskを完了するが、一方はFAILEDステータスになる
-      // result.errorがある場合はthrowしないので、succeededとしてカウントされる
-      expect(result.succeeded).toBe(2);
-      expect(result.failed).toBe(0);
+      // 一方は成功、もう一方は失敗してエラーがthrowされる
+      expect(result.succeeded).toBe(1);
+      expect(result.failed).toBe(1);
+      expect(result.failedTasks).toHaveLength(1);
+      expect(result.failedTasks[0].error).toContain('Test error');
 
       // ステータスが正しく更新されていること
       const updated1 = await taskRepository.findById(task1.id);
@@ -313,7 +315,8 @@ describe('TaskQueue', () => {
 
       taskQueue.registerWorker(mockWorker);
 
-      await taskQueue.executeTask(task.id, job);
+      // エラーがthrowされることを確認
+      await expect(taskQueue.executeTask(task.id, job)).rejects.toThrow('Temporary error');
 
       // retryCount < maxRetriesなのでQUEUEDに戻る
       const updated = await taskRepository.findById(task.id);
@@ -354,7 +357,8 @@ describe('TaskQueue', () => {
 
       taskQueue.registerWorker(mockWorker);
 
-      await taskQueue.executeTask(task.id, job);
+      // エラーがthrowされることを確認
+      await expect(taskQueue.executeTask(task.id, job)).rejects.toThrow('Permanent error');
 
       // retryCount >= maxRetriesなのでFAILED
       const updated = await taskRepository.findById(task.id);

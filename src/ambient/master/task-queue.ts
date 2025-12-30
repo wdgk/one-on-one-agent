@@ -69,13 +69,13 @@ export class TaskQueue {
       throw new Error(`Task not found: ${taskId}`);
     }
 
-    // Workerを取得
-    const worker = this.workers.get(task.source);
-    if (!worker) {
-      throw new Error(`Worker not found for source: ${task.source}`);
-    }
-
     try {
+      // Workerを取得
+      const worker = this.workers.get(task.source);
+      if (!worker) {
+        throw new Error(`Worker not found for source: ${task.source}`);
+      }
+
       // ステータスをRUNNINGに更新
       await this.taskRepository.updateStatus(task.id, 'RUNNING');
 
@@ -91,11 +91,11 @@ export class TaskQueue {
 
       // 結果に基づいてステータスを更新
       if (result.error) {
-        // リトライ可能かチェック
-        await this.handleFailure(task.id, result.error);
-      } else {
-        await this.taskRepository.updateStatus(task.id, 'DONE');
+        // エラーをthrowして呼び出し側に失敗を伝える（handleFailureはcatchブロックで呼ばれる）
+        throw new Error(result.error);
       }
+
+      await this.taskRepository.updateStatus(task.id, 'DONE');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       await this.handleFailure(task.id, errorMessage);

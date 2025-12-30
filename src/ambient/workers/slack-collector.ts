@@ -57,7 +57,8 @@ export class SlackCollector implements Worker {
       // メッセージをFactsに変換して保存（重複チェック）
       const facts = [];
       for (const message of messages) {
-        const url = message.permalink || '';
+        // permalinkがない場合は、ts + channelで一意なURLを生成
+        const url = message.permalink || `slack://channel/${message.channel}/message/${message.ts}`;
 
         // 既に同じURLのFactが存在するかチェック（冪等性）
         const existing = await this.factRepository.findByUrl(job.id, url);
