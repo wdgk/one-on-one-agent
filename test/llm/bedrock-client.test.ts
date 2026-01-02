@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AISDKClient, BedrockClient } from '../../src/llm/bedrock-client.js';
 
 // AI SDK のモック
@@ -26,10 +26,6 @@ describe('AISDKClient', () => {
     delete process.env.LLM_TEMPERATURE;
     delete process.env.LLM_MAX_TOKENS;
     client = new AISDKClient();
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
   });
 
   describe('generateText', () => {
