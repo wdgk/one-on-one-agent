@@ -97,7 +97,8 @@ export class DatabaseConnection {
     const schemaPath = join(__dirname, 'schema.sql');
     const schema = readFileSync(schemaPath, 'utf-8');
 
-    this.db.run(schema);
+    // sql.jsのexec()は複数ステートメントに対応
+    this.db.exec(schema);
   }
 
   /**
@@ -166,6 +167,7 @@ function toSqlParams(params: unknown[]): SqlBindParams {
     if (p === null || p === undefined) return null;
     if (typeof p === 'string') return p;
     if (typeof p === 'number') return p;
+    if (typeof p === 'boolean') return p ? 1 : 0; // SQLite互換: true→1, false→0
     if (p instanceof Uint8Array) return p;
     return String(p);
   });

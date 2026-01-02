@@ -9,6 +9,7 @@ import { z } from 'zod';
 const csvToArray = z
   .string()
   .optional()
+  .default('')
   .transform((val) => {
     if (!val || val.trim() === '') return [];
     return val
