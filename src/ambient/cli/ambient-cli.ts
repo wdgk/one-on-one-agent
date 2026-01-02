@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import 'dotenv/config';
-import { loadAmbientConfig } from '../../config/ambient-config.js';
+import { loadAmbientConfig } from '../../config/index.js';
 import { runCommand } from './commands/run.js';
 import { approveCommand } from './commands/approve.js';
 import { closeGlobalDatabaseConnection } from '../storage/database.js';
