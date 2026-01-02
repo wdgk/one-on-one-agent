@@ -65,6 +65,6 @@ export class AISDKClient implements LLMClient {
 
 /**
  * 後方互換性のためのエイリアス
- * @deprecated AISDKClientを使用してください
+ * @deprecated Use AISDKClient instead
  */
 export const BedrockClient = AISDKClient;
