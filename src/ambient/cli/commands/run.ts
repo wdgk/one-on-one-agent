@@ -17,7 +17,7 @@ import { CalendarClient } from '../../../calendar/client.js';
 import { SlackClient } from '../../../slack/client.js';
 import { BacklogClient } from '../../../backlog/client.js';
 import { OneOnOneAgendaAgent } from '../../../agent.js';
-import type { AmbientConfig } from '../../../config/ambient-config.js';
+import type { AmbientConfig } from '../../../config/index.js';
 import type { Source } from '../../storage/types.js';
 
 /**

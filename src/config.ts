@@ -1,69 +1,17 @@
 /**
- * 環境変数の検証と設定管理
+ * 環境変数の検証と設定管理（Zodベース）
  */
+import { z } from 'zod';
+import { baseConfigSchema, type AppConfig } from './config/schema.js';
 
 /**
- * 必須環境変数を検証して取得する
- * @param name 環境変数名
- * @param description 説明（エラーメッセージ用）
- * @returns 環境変数の値
- * @throws Error 環境変数が設定されていない場合
+ * 環境変数から基本設定用のオブジェクトを構築する
  */
-function getRequiredEnv(name: string, description: string): string {
-  const value = process.env[name];
-
-  if (!value || value.trim() === '') {
-    throw new Error(
-      `環境変数 ${name} が設定されていません。\n` +
-      `説明: ${description}\n` +
-      `設定方法: .env ファイルに ${name}=<値> を追加してください。`
-    );
-  }
-
-  return value.trim();
-}
-
-/**
- * アプリケーション設定
- */
-export interface AppConfig {
-  backlog: {
-    domain: string;
-    apiKey: string;
-  };
-  slack: {
-    botToken?: string;
-    userToken?: string;
-  };
-  calendar: {
-    credentialsPath?: string;
-    tokenPath?: string;
-  };
-  options?: {
-    maxConcurrency?: number;
-    continueOnError?: boolean;
-    outputDir?: string;
-    dryRun?: boolean;
-    templateDir?: string;
-  };
-}
-
-/**
- * 環境変数から設定を読み込む
- * @returns 検証済みの設定オブジェクト
- * @throws Error 必須環境変数が不足している場合
- */
-export function loadConfig(): AppConfig {
-  const config: AppConfig = {
+function buildConfigFromEnv(): Record<string, unknown> {
+  return {
     backlog: {
-      domain: getRequiredEnv(
-        'BACKLOG_DOMAIN',
-        'Backlog スペースのドメイン（例: your-space.backlog.com）'
-      ),
-      apiKey: getRequiredEnv(
-        'BACKLOG_API_KEY',
-        'Backlog API キー（個人設定から取得）'
-      ),
+      domain: process.env.BACKLOG_DOMAIN || '',
+      apiKey: process.env.BACKLOG_API_KEY || '',
     },
     slack: {
       botToken: process.env.SLACK_BOT_TOKEN,
@@ -73,12 +21,35 @@ export function loadConfig(): AppConfig {
       credentialsPath: process.env.GOOGLE_CALENDAR_CREDENTIALS_PATH,
       tokenPath: process.env.GOOGLE_CALENDAR_TOKEN_PATH,
     },
+    options: {
+      maxConcurrency: process.env.MAX_CONCURRENCY
+        ? parseInt(process.env.MAX_CONCURRENCY, 10)
+        : undefined,
+      continueOnError: process.env.CONTINUE_ON_ERROR === 'true',
+      outputDir: process.env.OUTPUT_DIR,
+      dryRun: process.env.DRY_RUN === 'true',
+      templateDir: process.env.TEMPLATE_DIR,
+    },
   };
+}
 
-  // AWS Bedrockの認証情報は環境変数やAWS設定ファイルから自動で読み込まれる
-  // AWS SDKが自動で処理するため、ここでのチェックは不要
+/**
+ * 環境変数から設定を読み込む
+ * @returns 検証済みの設定オブジェクト
+ * @throws Error 必須環境変数が不足している場合
+ */
+export function loadConfig(): AppConfig {
+  const rawConfig = buildConfigFromEnv();
+  const result = baseConfigSchema.safeParse(rawConfig);
 
-  return config;
+  if (!result.success) {
+    const errors = result.error.issues
+      .map((issue: z.ZodIssue) => `  - ${issue.path.join('.')}: ${issue.message}`)
+      .join('\n');
+    throw new Error(`設定エラー:\n${errors}`);
+  }
+
+  return result.data;
 }
 
 /**
@@ -93,3 +64,13 @@ export function getConfig(): AppConfig {
   }
   return configInstance;
 }
+
+/**
+ * 設定インスタンスをリセットする（テスト用）
+ */
+export function resetConfig(): void {
+  configInstance = null;
+}
+
+// 型のエクスポート
+export type { AppConfig };

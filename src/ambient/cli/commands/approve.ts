@@ -3,7 +3,7 @@ import { JobRepository } from '../../storage/job-repository.js';
 import { TaskRepository } from '../../storage/task-repository.js';
 import { JobOrchestrator } from '../../master/job-orchestrator.js';
 import { TaskQueue } from '../../master/task-queue.js';
-import type { AmbientConfig } from '../../../config/ambient-config.js';
+import type { AmbientConfig } from '../../../config/index.js';
 
 /**
  * approveコマンド - Jobを承認する

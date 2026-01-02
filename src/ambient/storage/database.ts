@@ -1,13 +1,14 @@
-import Database from 'better-sqlite3';
-import { readFileSync } from 'fs';
+import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 /**
- * SQLiteデータベース接続を管理するクラス
+ * SQLiteデータベース接続を管理するクラス（sql.js版）
+ * sql.jsはWebAssemblyベースでネイティブバイナリ不要
  */
 export class DatabaseConnection {
-  private db: Database.Database | null = null;
+  private db: SqlJsDatabase | null = null;
   private dbPath: string;
 
   constructor(dbPath: string) {
@@ -19,20 +20,27 @@ export class DatabaseConnection {
    */
   async connect(): Promise<void> {
     if (this.db) {
-      // 既に接続済み
       return;
     }
 
-    this.db = new Database(this.dbPath);
+    const SQL = await initSqlJs();
 
-    // Write-Ahead Logging モードを有効化（並行アクセス性能向上）
-    this.db.pragma('journal_mode = WAL');
+    // 既存のDBファイルがあれば読み込む
+    if (existsSync(this.dbPath)) {
+      const fileBuffer = readFileSync(this.dbPath);
+      this.db = new SQL.Database(fileBuffer);
+    } else {
+      this.db = new SQL.Database();
+    }
 
     // 外部キー制約を有効化
-    this.db.pragma('foreign_keys = ON');
+    this.db.run('PRAGMA foreign_keys = ON');
 
     // スキーマ初期化
     await this.initializeSchema();
+
+    // 初期化後にファイルに保存
+    this.saveToFile();
   }
 
   /**
@@ -40,20 +48,40 @@ export class DatabaseConnection {
    */
   async disconnect(): Promise<void> {
     if (this.db) {
+      // 切断前にファイルに保存
+      this.saveToFile();
       this.db.close();
       this.db = null;
     }
   }
 
   /**
-   * データベースインスタンスを取得する
-   * @throws Error 接続されていない場合
+   * データベースをファイルに保存する
    */
-  getDb(): Database.Database {
+  private saveToFile(): void {
+    if (this.db) {
+      const data = this.db.export();
+      const buffer = Buffer.from(data);
+      writeFileSync(this.dbPath, buffer);
+    }
+  }
+
+  /**
+   * 変更をファイルに永続化する
+   * 重要な更新の後に呼び出す
+   */
+  persist(): void {
+    this.saveToFile();
+  }
+
+  /**
+   * better-sqlite3互換のラッパーオブジェクトを取得する
+   */
+  getDb(): BetterSqlite3Compatible {
     if (!this.db) {
       throw new Error('Database not connected. Call connect() first.');
     }
-    return this.db;
+    return new BetterSqlite3Compatible(this.db, () => this.saveToFile());
   }
 
   /**
@@ -64,33 +92,161 @@ export class DatabaseConnection {
       throw new Error('Database not connected');
     }
 
-    // schema.sqlを読み込んで実行
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
     const schemaPath = join(__dirname, 'schema.sql');
     const schema = readFileSync(schemaPath, 'utf-8');
 
+    // sql.jsのexec()は複数ステートメントに対応
     this.db.exec(schema);
   }
 
   /**
    * トランザクション内で処理を実行する
-   * 注意: better-sqlite3は同期APIのため、コールバック関数も同期である必要があります
-   * @param fn トランザクション内で実行する関数（同期のみ）
+   * @param fn トランザクション内で実行する関数
    * @returns 関数の戻り値
    */
-  transaction<T>(fn: (db: Database.Database) => T): T {
+  transaction<T>(fn: (db: BetterSqlite3Compatible) => T): T {
     const db = this.getDb();
 
     try {
-      db.prepare('BEGIN').run();
+      db.exec('BEGIN');
       const result = fn(db);
-      db.prepare('COMMIT').run();
+      db.exec('COMMIT');
+      this.saveToFile();
       return result;
     } catch (error) {
-      db.prepare('ROLLBACK').run();
+      db.exec('ROLLBACK');
       throw error;
     }
+  }
+}
+
+/**
+ * better-sqlite3互換のラッパークラス
+ * 既存のRepositoryコードを変更せずに使用可能
+ */
+class BetterSqlite3Compatible {
+  constructor(
+    private db: SqlJsDatabase,
+    private onWrite: () => void
+  ) {}
+
+  /**
+   * SQLを実行する（複数ステートメント対応）
+   */
+  exec(sql: string): void {
+    this.db.run(sql);
+  }
+
+  /**
+   * プリペアドステートメントを作成する
+   */
+  prepare(sql: string): PreparedStatement {
+    return new PreparedStatement(this.db, sql, this.onWrite);
+  }
+
+  /**
+   * Pragma設定（sql.jsでは一部のみ対応）
+   */
+  pragma(statement: string): void {
+    this.db.run(`PRAGMA ${statement}`);
+  }
+}
+
+/**
+ * sql.jsのバインドパラメータ型
+ */
+type SqlBindParams = (string | number | null | Uint8Array)[];
+
+/**
+ * パラメータをsql.js互換の型に変換する
+ */
+function toSqlParams(params: unknown[]): SqlBindParams {
+  return params.map((p) => {
+    if (p === null || p === undefined) return null;
+    if (typeof p === 'string') return p;
+    if (typeof p === 'number') return p;
+    if (typeof p === 'boolean') return p ? 1 : 0; // SQLite互換: true→1, false→0
+    if (p instanceof Uint8Array) return p;
+    return String(p);
+  });
+}
+
+/**
+ * プリペアドステートメントのラッパー
+ */
+class PreparedStatement {
+  constructor(
+    private db: SqlJsDatabase,
+    private sql: string,
+    private onWrite: () => void
+  ) {}
+
+  /**
+   * 更新クエリを実行する（INSERT, UPDATE, DELETE）
+   */
+  run(...params: unknown[]): { changes: number; lastInsertRowid: number } {
+    this.db.run(this.sql, toSqlParams(params));
+    this.onWrite();
+
+    // sql.jsではlast_insert_rowid()を明示的に問い合わせて取得する
+    let lastInsertRowid = 0;
+    const stmt = this.db.prepare('SELECT last_insert_rowid() AS id');
+    try {
+      if (stmt.step()) {
+        const row = stmt.getAsObject() as { id?: unknown };
+        const value = row.id;
+        if (typeof value === 'number') {
+          lastInsertRowid = value;
+        } else if (typeof value === 'string') {
+          const parsed = Number(value);
+          if (!Number.isNaN(parsed)) {
+            lastInsertRowid = parsed;
+          }
+        }
+      }
+    } finally {
+      stmt.free();
+    }
+
+    return {
+      changes: this.db.getRowsModified(),
+      lastInsertRowid,
+    };
+  }
+
+  /**
+   * 1行を取得する
+   */
+  get(...params: unknown[]): unknown {
+    const stmt = this.db.prepare(this.sql);
+    stmt.bind(toSqlParams(params));
+
+    if (stmt.step()) {
+      const row = stmt.getAsObject();
+      stmt.free();
+      return row;
+    }
+
+    stmt.free();
+    return undefined;
+  }
+
+  /**
+   * 全行を取得する
+   */
+  all(...params: unknown[]): unknown[] {
+    const stmt = this.db.prepare(this.sql);
+    stmt.bind(toSqlParams(params));
+
+    const results: unknown[] = [];
+    while (stmt.step()) {
+      results.push(stmt.getAsObject());
+    }
+
+    stmt.free();
+    return results;
   }
 }
 
