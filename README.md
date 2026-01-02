@@ -26,7 +26,82 @@ Backlogの活動データから1on1アジェンダを自動生成するCLIツー
   - Ubuntu/Debian: `build-essential`
   - Windows: Visual Studio Build Tools
 
-## セットアップ
+## Dev Container（推奨）
+
+VS CodeとDockerがインストールされている環境では、Dev Containerを使用することで環境構築を大幅に簡略化できます。
+
+### 必要なもの
+- [Docker Desktop](https://www.docker.com/products/docker-desktop)
+- [Visual Studio Code](https://code.visualstudio.com/)
+- [Dev Containers拡張機能](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+
+### 使い方
+
+1. リポジトリをクローン:
+   ```bash
+   git clone https://github.com/wdgk/one-on-one-agent.git
+   cd one-on-one-agent
+   ```
+
+2. VS Codeでフォルダを開く:
+   ```bash
+   code .
+   ```
+
+3. VS Codeで「Reopen in Container」を選択（または `Cmd+Shift+P` → "Dev Containers: Reopen in Container"）
+
+Dev Containerが起動すると、以下が自動で設定されます:
+- Node.js 20
+- TypeScript
+- C/C++ビルドツール（better-sqlite3用）
+- 推奨VS Code拡張機能
+- 依存関係のインストール
+
+### AWS認証情報の設定
+
+Dev Containerはホストの `~/.aws` ディレクトリを自動的にマウントします（`$HOME/.aws`を使用）。ホスト側で以下のいずれかの方法でAWS認証情報を設定してください:
+
+1. `aws configure` コマンドで設定
+2. `~/.aws/credentials` ファイルを手動で作成
+
+**Windows環境での注意**:
+- Git Bash、PowerShell、WSL2などのターミナルを使用している場合、`HOME`環境変数が自動的に設定されます
+- WindowsネイティブのコマンドプロンプトでDev Containerを起動する場合は、以下のいずれかを実施してください:
+  - システム環境変数`HOME`を`%USERPROFILE%`に設定
+  - または、`.devcontainer/devcontainer.json`の`mounts`セクションを`${localEnv:USERPROFILE}/.aws`に変更
+
+### 環境変数の設定
+
+Dev Container内でも `.env` ファイルが必要です。以下の手順で設定してください:
+
+```bash
+cp .env.example .env
+# .envファイルを編集して必要な環境変数を設定
+```
+
+### Claude CodeとCodexの設定
+
+Dev Containerは自動的にClaudeCodeとCodexをインストールし、ホスト側の設定を利用できるようにします:
+
+- **自動インストール**: `@anthropic-ai/claude-code`と`@openai/codex`が自動的にインストールされます
+- **設定の共有**: ホストの`~/.claude`と`~/.codex`ディレクトリがマウントされ、認証情報や設定がそのまま利用できます
+
+**初回セットアップが必要な場合**:
+ホスト側でClaudeCodeまたはCodexを未設定の場合は、Dev Container起動後にコンテナ内で初回設定を行ってください:
+
+```bash
+# Claude Codeの初期設定
+claude auth login
+
+# Codexの初期設定
+codex auth login
+```
+
+設定はホストの`~/.claude`と`~/.codex`に保存されるため、次回以降は自動的に利用できます。
+
+## セットアップ（ローカル環境）
+
+Dev Containerを使用しない場合は、以下の手順でローカル環境をセットアップしてください。
 
 ### 1. リポジトリのクローン
 
