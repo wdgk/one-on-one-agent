@@ -154,6 +154,24 @@ class BetterSqlite3Compatible {
 }
 
 /**
+ * sql.jsのバインドパラメータ型
+ */
+type SqlBindParams = (string | number | null | Uint8Array)[];
+
+/**
+ * パラメータをsql.js互換の型に変換する
+ */
+function toSqlParams(params: unknown[]): SqlBindParams {
+  return params.map((p) => {
+    if (p === null || p === undefined) return null;
+    if (typeof p === 'string') return p;
+    if (typeof p === 'number') return p;
+    if (p instanceof Uint8Array) return p;
+    return String(p);
+  });
+}
+
+/**
  * プリペアドステートメントのラッパー
  */
 class PreparedStatement {
@@ -167,11 +185,32 @@ class PreparedStatement {
    * 更新クエリを実行する（INSERT, UPDATE, DELETE）
    */
   run(...params: unknown[]): { changes: number; lastInsertRowid: number } {
-    this.db.run(this.sql, params as any[]);
+    this.db.run(this.sql, toSqlParams(params));
     this.onWrite();
+
+    // sql.jsではlast_insert_rowid()を明示的に問い合わせて取得する
+    let lastInsertRowid = 0;
+    const stmt = this.db.prepare('SELECT last_insert_rowid() AS id');
+    try {
+      if (stmt.step()) {
+        const row = stmt.getAsObject() as { id?: unknown };
+        const value = row.id;
+        if (typeof value === 'number') {
+          lastInsertRowid = value;
+        } else if (typeof value === 'string') {
+          const parsed = Number(value);
+          if (!Number.isNaN(parsed)) {
+            lastInsertRowid = parsed;
+          }
+        }
+      }
+    } finally {
+      stmt.free();
+    }
+
     return {
       changes: this.db.getRowsModified(),
-      lastInsertRowid: 0, // sql.jsでは直接取得不可
+      lastInsertRowid,
     };
   }
 
@@ -180,7 +219,7 @@ class PreparedStatement {
    */
   get(...params: unknown[]): unknown {
     const stmt = this.db.prepare(this.sql);
-    stmt.bind(params as any[]);
+    stmt.bind(toSqlParams(params));
 
     if (stmt.step()) {
       const row = stmt.getAsObject();
@@ -197,7 +236,7 @@ class PreparedStatement {
    */
   all(...params: unknown[]): unknown[] {
     const stmt = this.db.prepare(this.sql);
-    stmt.bind(params as any[]);
+    stmt.bind(toSqlParams(params));
 
     const results: unknown[] = [];
     while (stmt.step()) {
