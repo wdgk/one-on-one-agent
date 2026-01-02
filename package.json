@@ -28,9 +28,10 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.958.0",
+    "@ai-sdk/amazon-bedrock": "^4.0.4",
     "@modelcontextprotocol/sdk": "^1.0.4",
     "@slack/web-api": "^7.12.0",
+    "ai": "^6.0.5",
     "date-fns": "^3.0.0",
     "dotenv": "^17.2.3",
     "googleapis": "^169.0.0",

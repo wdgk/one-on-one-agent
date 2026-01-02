@@ -1,24 +1,40 @@
-import {
-  BedrockRuntimeClient,
-  InvokeModelCommand,
-} from '@aws-sdk/client-bedrock-runtime';
+/**
+ * AI SDKベースのLLMクライアント
+ *
+ * Vercel AI SDKを使用してLLMと通信する
+ * 現在はAWS Bedrockをサポート
+ */
+import { generateText, LanguageModel } from 'ai';
 import type { LLMClient } from './types.js';
+import {
+  getDefaultModel,
+  getDefaultGenerationOptions,
+  createModel,
+  type LLMProvider,
+} from './provider.js';
 
 /**
- * AWS Bedrock経由でClaude APIを利用するクライアント
+ * AI SDKを使用したLLMクライアント
  */
-export class BedrockClient implements LLMClient {
-  private client: BedrockRuntimeClient;
-  private modelId: string;
+export class AISDKClient implements LLMClient {
+  private model: LanguageModel;
+  private temperature: number;
+  private maxTokens: number;
 
-  constructor() {
-    // AWS認証情報は環境変数やAWS設定ファイルから自動で取得される
-    this.client = new BedrockRuntimeClient({
-      region: process.env.AWS_REGION || 'us-east-1',
-    });
+  constructor(
+    provider?: LLMProvider,
+    modelId?: string,
+    options?: { temperature?: number; maxTokens?: number }
+  ) {
+    if (provider) {
+      this.model = createModel(provider, modelId);
+    } else {
+      this.model = getDefaultModel();
+    }
 
-    // デフォルトはClaude Sonnet 4.5
-    this.modelId = process.env.BEDROCK_MODEL_ID || 'us.anthropic.claude-sonnet-4-5-20250929-v1:0';
+    const defaults = getDefaultGenerationOptions();
+    this.temperature = options?.temperature ?? defaults.temperature;
+    this.maxTokens = options?.maxTokens ?? defaults.maxTokens;
   }
 
   /**
@@ -28,49 +44,27 @@ export class BedrockClient implements LLMClient {
    * @returns 生成されたテキスト
    */
   async generateText(systemPrompt: string, userPrompt: string): Promise<string> {
-    // Anthropic Messages API形式のリクエストボディを構築
-    const body = JSON.stringify({
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: userPrompt,
-        },
-      ],
-      temperature: 0.7,
-    });
-
-    const command = new InvokeModelCommand({
-      modelId: this.modelId,
-      contentType: 'application/json',
-      accept: 'application/json',
-      body: body,
-    });
-
     try {
-      const response = await this.client.send(command);
+      const result = await generateText({
+        model: this.model,
+        system: systemPrompt,
+        prompt: userPrompt,
+        temperature: this.temperature,
+        maxOutputTokens: this.maxTokens,
+      });
 
-      // レスポンスボディをデコード
-      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-
-      // Messages API形式のレスポンスから最初のテキストコンテンツを抽出
-      if (responseBody.content && responseBody.content.length > 0) {
-        const textContent = responseBody.content.find(
-          (item: any) => item.type === 'text'
-        );
-        if (textContent) {
-          return textContent.text;
-        }
-      }
-
-      throw new Error('レスポンスにテキストコンテンツが含まれていません');
+      return result.text;
     } catch (error) {
       if (error instanceof Error) {
-        throw new Error(`Bedrock API呼び出しに失敗しました: ${error.message}`);
+        throw new Error(`LLM API呼び出しに失敗しました: ${error.message}`);
       }
       throw error;
     }
   }
 }
+
+/**
+ * 後方互換性のためのエイリアス
+ * @deprecated AISDKClientを使用してください
+ */
+export const BedrockClient = AISDKClient;

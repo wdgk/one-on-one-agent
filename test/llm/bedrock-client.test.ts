@@ -1,41 +1,45 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BedrockClient } from '../../src/llm/bedrock-client.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { AISDKClient, BedrockClient } from '../../src/llm/bedrock-client.js';
 
-// AWS SDK のモック
-const mockSend = vi.fn();
-vi.mock('@aws-sdk/client-bedrock-runtime', () => {
-  return {
-    BedrockRuntimeClient: vi.fn().mockImplementation(() => ({
-      send: mockSend,
-    })),
-    InvokeModelCommand: vi.fn().mockImplementation((params) => params),
-  };
-});
+// AI SDK のモック
+const mockGenerateText = vi.fn();
+vi.mock('ai', () => ({
+  generateText: (...args: unknown[]) => mockGenerateText(...args),
+}));
 
-describe('BedrockClient', () => {
-  let client: BedrockClient;
+// プロバイダーのモック
+vi.mock('@ai-sdk/amazon-bedrock', () => ({
+  createAmazonBedrock: vi.fn().mockReturnValue(
+    vi.fn().mockReturnValue({ modelId: 'mock-bedrock-model' })
+  ),
+}));
+
+describe('AISDKClient', () => {
+  let client: AISDKClient;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    client = new BedrockClient();
+    // 環境変数をリセット
+    delete process.env.LLM_PROVIDER;
+    delete process.env.LLM_MODEL_ID;
+    delete process.env.BEDROCK_MODEL_ID;
+    delete process.env.LLM_TEMPERATURE;
+    delete process.env.LLM_MAX_TOKENS;
+    client = new AISDKClient();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
   });
 
   describe('generateText', () => {
     it('正常なレスポンスからテキストを抽出できる', async () => {
       const mockResponseText = 'これは生成されたテキストです。';
-      
-      const mockResponse = {
-        body: new TextEncoder().encode(JSON.stringify({
-          content: [
-            {
-              type: 'text',
-              text: mockResponseText,
-            },
-          ],
-        })),
-      };
 
-      mockSend.mockResolvedValue(mockResponse);
+      mockGenerateText.mockResolvedValue({
+        text: mockResponseText,
+        usage: { totalTokens: 100 },
+      });
 
       const systemPrompt = 'あなたはアシスタントです。';
       const userPrompt = 'こんにちは';
@@ -43,122 +47,46 @@ describe('BedrockClient', () => {
       const result = await client.generateText(systemPrompt, userPrompt);
 
       expect(result).toBe(mockResponseText);
-      expect(mockSend).toHaveBeenCalledOnce();
+      expect(mockGenerateText).toHaveBeenCalledOnce();
     });
 
-    it('リクエストボディに正しいパラメータが含まれる', async () => {
-      const mockResponse = {
-        body: new TextEncoder().encode(JSON.stringify({
-          content: [{ type: 'text', text: 'テスト' }],
-        })),
-      };
-
-      mockSend.mockResolvedValue(mockResponse);
+    it('リクエストに正しいパラメータが含まれる', async () => {
+      mockGenerateText.mockResolvedValue({
+        text: 'テスト',
+        usage: { totalTokens: 50 },
+      });
 
       const systemPrompt = 'システムプロンプト';
       const userPrompt = 'ユーザープロンプト';
 
       await client.generateText(systemPrompt, userPrompt);
 
-      const callArgs = mockSend.mock.calls[0][0];
-      const requestBody = JSON.parse(callArgs.body);
-
-      expect(requestBody.anthropic_version).toBe('bedrock-2023-05-31');
-      expect(requestBody.max_tokens).toBe(4096);
-      expect(requestBody.system).toBe(systemPrompt);
-      expect(requestBody.messages).toEqual([
-        {
-          role: 'user',
-          content: userPrompt,
-        },
-      ]);
-      expect(requestBody.temperature).toBe(0.7);
-    });
-
-    it('テキストコンテンツが含まれない場合はエラーをスローする', async () => {
-      const mockResponse = {
-        body: new TextEncoder().encode(JSON.stringify({
-          content: [
-            {
-              type: 'image',
-              source: {},
-            },
-          ],
-        })),
-      };
-
-      mockSend.mockResolvedValue(mockResponse);
-
-      await expect(
-        client.generateText('system', 'user')
-      ).rejects.toThrow('レスポンスにテキストコンテンツが含まれていません');
-    });
-
-    it('contentが空配列の場合はエラーをスローする', async () => {
-      const mockResponse = {
-        body: new TextEncoder().encode(JSON.stringify({
-          content: [],
-        })),
-      };
-
-      mockSend.mockResolvedValue(mockResponse);
-
-      await expect(
-        client.generateText('system', 'user')
-      ).rejects.toThrow('レスポンスにテキストコンテンツが含まれていません');
+      expect(mockGenerateText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          system: systemPrompt,
+          prompt: userPrompt,
+          temperature: 0.7,
+          maxOutputTokens: 4096,
+        })
+      );
     });
 
     it('API呼び出しが失敗した場合はエラーメッセージを含む', async () => {
       const errorMessage = 'API rate limit exceeded';
-      mockSend.mockRejectedValue(new Error(errorMessage));
+      mockGenerateText.mockRejectedValue(new Error(errorMessage));
 
       await expect(
         client.generateText('system', 'user')
-      ).rejects.toThrow(`Bedrock API呼び出しに失敗しました: ${errorMessage}`);
-    });
-
-    it('複数のコンテンツブロックから最初のテキストを抽出する', async () => {
-      const mockResponse = {
-        body: new TextEncoder().encode(JSON.stringify({
-          content: [
-            {
-              type: 'image',
-              source: {},
-            },
-            {
-              type: 'text',
-              text: '最初のテキスト',
-            },
-            {
-              type: 'text',
-              text: '2番目のテキスト',
-            },
-          ],
-        })),
-      };
-
-      mockSend.mockResolvedValue(mockResponse);
-
-      const result = await client.generateText('system', 'user');
-
-      expect(result).toBe('最初のテキスト');
+      ).rejects.toThrow(`LLM API呼び出しに失敗しました: ${errorMessage}`);
     });
 
     it('日本語のテキストを正しく処理できる', async () => {
       const japaneseText = 'これは日本語のテストです。\n改行も含まれています。';
-      
-      const mockResponse = {
-        body: new TextEncoder().encode(JSON.stringify({
-          content: [
-            {
-              type: 'text',
-              text: japaneseText,
-            },
-          ],
-        })),
-      };
 
-      mockSend.mockResolvedValue(mockResponse);
+      mockGenerateText.mockResolvedValue({
+        text: japaneseText,
+        usage: { totalTokens: 80 },
+      });
 
       const result = await client.generateText(
         '日本語で応答してください。',
@@ -166,6 +94,54 @@ describe('BedrockClient', () => {
       );
 
       expect(result).toBe(japaneseText);
+    });
+
+    it('カスタム設定でクライアントを作成できる', async () => {
+      const customClient = new AISDKClient('bedrock', 'custom-model-id', {
+        temperature: 0.5,
+        maxTokens: 2048,
+      });
+
+      mockGenerateText.mockResolvedValue({
+        text: 'カスタム設定テスト',
+        usage: { totalTokens: 30 },
+      });
+
+      await customClient.generateText('system', 'user');
+
+      expect(mockGenerateText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          temperature: 0.5,
+          maxOutputTokens: 2048,
+        })
+      );
+    });
+
+    it('環境変数から設定を読み込める', async () => {
+      process.env.LLM_TEMPERATURE = '0.3';
+      process.env.LLM_MAX_TOKENS = '1024';
+
+      const envClient = new AISDKClient();
+
+      mockGenerateText.mockResolvedValue({
+        text: '環境変数テスト',
+        usage: { totalTokens: 20 },
+      });
+
+      await envClient.generateText('system', 'user');
+
+      expect(mockGenerateText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          temperature: 0.3,
+          maxOutputTokens: 1024,
+        })
+      );
+    });
+  });
+
+  describe('BedrockClient alias', () => {
+    it('BedrockClientはAISDKClientのエイリアスである', () => {
+      expect(BedrockClient).toBe(AISDKClient);
     });
   });
 });
