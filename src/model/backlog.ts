@@ -16,6 +16,8 @@ export type IssueSummary = {
   project: string;
   /** 課題URL */
   url: string;
+  /** Markdownリンク形式（例: [PROJ-123: タイトル](URL)） */
+  markdownLink: string;
   /** 更新日時（ISO 8601形式） */
   updatedAt: string;
   /** 作成日時（ISO 8601形式）（オプション） */

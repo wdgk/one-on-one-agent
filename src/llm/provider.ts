@@ -63,6 +63,9 @@ export function createModel(
     case 'bedrock': {
       // AWS_REGIONが設定されていない場合はus-east-1をデフォルトとして使用
       const region = process.env.AWS_REGION || 'us-east-1';
+
+      // @ai-sdk/amazon-bedrockは内部でAWS SDKの認証チェーンを使用する
+      // AWS_PROFILE環境変数が設定されていれば、自動的にプロファイルから認証情報を取得する
       const bedrockProvider = createAmazonBedrock({ region });
       return bedrockProvider(effectiveModelId);
     }

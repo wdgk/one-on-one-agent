@@ -4,13 +4,60 @@ import 'dotenv/config';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import prompts from 'prompts';
+import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import { OneOnOneAgendaAgent } from './agent.js';
 import { generateAgendaFilename } from './file-helpers.js';
+
+/**
+ * AWS SSOプロファイルから認証情報を解決して環境変数に設定する
+ */
+async function setupAwsCredentials() {
+  // AWS_PROFILEが設定されている場合のみ処理する
+  if (!process.env.AWS_PROFILE) {
+    return;
+  }
+
+  // すでにAWS_ACCESS_KEY_IDが設定されている場合はスキップ
+  if (process.env.AWS_ACCESS_KEY_ID) {
+    return;
+  }
+
+  try {
+    // AWS SDKの認証プロバイダーチェーンを使用して認証情報を解決
+    const credentialsProvider = fromNodeProviderChain({
+      profile: process.env.AWS_PROFILE,
+    });
+
+    const credentials = await credentialsProvider();
+
+    // 解決した認証情報を環境変数に設定
+    process.env.AWS_ACCESS_KEY_ID = credentials.accessKeyId;
+    process.env.AWS_SECRET_ACCESS_KEY = credentials.secretAccessKey;
+    if (credentials.sessionToken) {
+      process.env.AWS_SESSION_TOKEN = credentials.sessionToken;
+    }
+  } catch (error) {
+    // 認証情報の解決に失敗した場合は警告を表示
+    console.warn(
+      `⚠️  AWS認証情報の解決に失敗しました (プロファイル: ${process.env.AWS_PROFILE})`
+    );
+    if (error instanceof Error) {
+      console.warn(`   ${error.message}`);
+    }
+    console.warn(
+      '   AWS SSOを使用している場合は、`aws sso login --profile ' +
+        process.env.AWS_PROFILE +
+        '`でログインしてください。\n'
+    );
+  }
+}
 
 /**
  * CLIエントリーポイント
  */
 async function main() {
+  // AWS認証情報を設定
+  await setupAwsCredentials();
   const agent = new OneOnOneAgendaAgent();
 
   try {
