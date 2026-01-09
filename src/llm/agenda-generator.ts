@@ -40,6 +40,12 @@ export class AgendaGenerator {
    - マージされたPRは成果として重視
    - バグより機能開発を成長の文脈で取り上げる
 
+4. 課題の参照方法
+   - 課題を参照する際は、必ず各課題データの "markdownLink" フィールドを使用してください
+   - 例: 課題データに "markdownLink": "[PROJ-123: ユーザー認証機能](https://example.backlog.com/view/PROJ-123)" がある場合、
+     アジェンダには「[PROJ-123: ユーザー認証機能](https://example.backlog.com/view/PROJ-123)が完了しました」のように記載
+   - 課題を単独で言及する場合も、markdownLinkフィールドの値をそのまま使用してください
+
 入力データはJSON形式で提供されます。`;
 
     const userPrompt = `以下が対象メンバーの直近活動ログです。

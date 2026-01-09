@@ -96,6 +96,7 @@ describe('BacklogCollector', () => {
           status: 'InProgress',
           project: 'proj-1',
           url: 'https://example.backlog.com/view/PROJ-123',
+          markdownLink: '[PROJ-123: Fix bug](https://example.backlog.com/view/PROJ-123)',
           updatedAt: '2025-01-05T10:00:00Z',
           createdAt: '2025-01-01T09:00:00Z',
           priority: 'High',
@@ -239,6 +240,7 @@ describe('BacklogCollector', () => {
           status: 'InProgress',
           project: 'proj-1',
           url: 'https://example.backlog.com/view/PROJ-123',
+          markdownLink: '[PROJ-123: Fix bug](https://example.backlog.com/view/PROJ-123)',
           updatedAt: '2025-01-05T10:00:00Z',
         },
       ];

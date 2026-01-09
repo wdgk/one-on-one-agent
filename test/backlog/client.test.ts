@@ -169,6 +169,7 @@ describe('BacklogClient', () => {
       expect(issue1.type).toBe('タスク');
       expect(issue1.status).toBe('処理中');
       expect(issue1.url).toBe('https://test.backlog.com/view/TEST-1');
+      expect(issue1.markdownLink).toBe('[TEST-1: テスト課題1](https://test.backlog.com/view/TEST-1)');
     });
 
     it('課題が0件の場合、空配列を返す', async () => {

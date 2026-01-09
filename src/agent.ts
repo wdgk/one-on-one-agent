@@ -205,7 +205,7 @@ export class OneOnOneAgendaAgent {
       output += `- No issues found.\n`;
     } else {
       for (const issue of input.backlog.issues) {
-        output += `- [${issue.status}] ${issue.key}: ${issue.title} (${issue.url})\n`;
+        output += `- [${issue.status}] ${issue.markdownLink}\n`;
       }
     }
     output += `\n`;

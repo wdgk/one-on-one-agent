@@ -182,18 +182,25 @@ export class BacklogClient {
 
     // IssueSummary形式に変換
     const config = getConfig();
-    return issues.map((issue) => ({
-      id: String(issue.id),
-      key: issue.issueKey,
-      title: issue.summary,
-      type: issue.issueType?.name || 'unknown',
-      status: issue.status?.name || 'unknown',
-      project: issue.projectId ? String(issue.projectId) : 'unknown',
-      url: `https://${config.backlog.domain}/view/${issue.issueKey}`,
-      updatedAt: issue.updated,
-      createdAt: issue.created,
-      priority: issue.priority?.name,
-    }));
+    return issues.map((issue) => {
+      const key = issue.issueKey;
+      const title = issue.summary;
+      const url = `https://${config.backlog.domain}/view/${key}`;
+
+      return {
+        id: String(issue.id),
+        key,
+        title,
+        type: issue.issueType?.name || 'unknown',
+        status: issue.status?.name || 'unknown',
+        project: issue.projectId ? String(issue.projectId) : 'unknown',
+        url,
+        markdownLink: `[${key}: ${title}](${url})`,
+        updatedAt: issue.updated,
+        createdAt: issue.created,
+        priority: issue.priority?.name,
+      };
+    });
   }
 
   /**
